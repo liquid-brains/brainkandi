@@ -15,7 +15,7 @@ type StoredDeviceHistory = {
 	lastUsedAddress?: string;
 };
 
-const deviceStorageKey = 'brainkandy.devices.v1';
+const deviceStorageKey = 'brainkandi.devices.v1';
 
 function validateAddress(address: string): string {
 	const normalizedAddress = address.trim();

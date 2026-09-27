@@ -1,14 +1,14 @@
 {
   "expo": {
-    "name": "brainkandy",
-    "slug": "brainkandy",
+    "name": "Brain Kandi",
+    "slug": "brainkandi",
     "version": "0.1.0",
     "orientation": "portrait",
     "jsEngine": "jsc",
     "userInterfaceStyle": "dark",
     "icon": "./logo/icon-input.png",
     "splash": {
-      "image": "./logo/brainkandy.png",
+      "image": "./logo/brainkandi.png",
       "resizeMode": "contain",
       "backgroundColor": "#ff1493"
     },
@@ -17,7 +17,7 @@
       "./plugins/with-android-cleartext.js"
     ],
     "android": {
-      "package": "org.brainkandy.app",
+      "package": "org.brainkandi.app",
       "usesCleartextTraffic": true,
       "adaptiveIcon": {
         "foregroundImage": "./logo/icon-input.png",

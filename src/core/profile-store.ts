@@ -4,7 +4,7 @@ import { decapsulateProfiles, encapsulateProfiles } from './profile-codec';
 import { createProfileID } from './profiles';
 import type { ProfileID, SessionProfile, StoredProfile } from './profiles';
 
-const profilesStorageKey = 'brainkandy.profiles.v1';
+const profilesStorageKey = 'brainkandi.profiles.v1';
 
 export interface ProfileStore {
 	list(): Promise<StoredProfile[]>;

@@ -31,9 +31,9 @@ import { validateRandomSessionParameters } from './src/core/profiles';
 const profileStore = new AsyncStorageProfileStore();
 const deviceStore = new AsyncStorageDeviceStore();
 const sessionRunner = new SessionRunner(new VielightDeviceFactory());
-const keepAwakeTag = 'brainkandy-session';
+const keepAwakeTag = 'brainkandi-session';
 const addDevicePickerValue = '__add_new_device__';
-const sessionNotificationCategoryID = 'brainkandy-session';
+const sessionNotificationCategoryID = 'brainkandi-session';
 const stopSessionNotificationActionID = 'stop-session';
 
 Notifications.setNotificationHandler({
@@ -70,6 +70,52 @@ const defaultFormValues: FormValues = {
 	powerMin: '1',
 	powerMax: ''
 };
+
+const defaultFileProfileJSON = JSON.stringify({
+	defaultFile: false,
+	secretFile: false,
+	usedByBatch: 0,
+	single: true,
+	updateExisting: true,
+	saveNew: false,
+	filename: 'tmp1',
+	notes: 'Delete',
+	frequency: {
+		active: false,
+		startFreq: null,
+		endFreq: null,
+		freqStepSize: null,
+		stepDuration: null
+	},
+	power: {
+		active: false,
+		startPower: null,
+		endPower: null,
+		powerStepSize: null,
+		stepDuration: null
+	},
+	cross: {
+		active: false,
+		freq: null,
+		couplingDelay: null,
+		stopCoupling: null
+	},
+	modules: Array.from({ length: 12 }, function (_, index) {
+		return({
+			module_no: index + 1,
+			active: true,
+			activeRunTime: 1,
+			delayStartTime: 9,
+			moduleControl: {
+				phase: 0,
+				dutyCycle: 5
+			},
+			freq: 55,
+			power: 94,
+			applyCross: false
+		});
+	})
+}, undefined, 2);
 
 type ProfileEditorValues = {
 	kind: 'file' | 'random';
@@ -170,9 +216,10 @@ export default function App(): React.JSX.Element {
 	const sessionNotificationID = useRef<string | undefined>(undefined);
 	const [randomName, setRandomName] = useState('My random session');
 	const [randomForm, setRandomForm] = useState<FormValues>(defaultFormValues);
-	const [fileName, setFileName] = useState('session.vnp0');
+	const [fileName, setFileName] = useState('tmp1.vnp0');
 	const [fileProfileName, setFileProfileName] = useState('My file session');
-	const [fileJSON, setFileJSON] = useState('{\n  "filename": "session"\n}');
+	const [fileJSON, setFileJSON] = useState(defaultFileProfileJSON);
+	const [isFileJSONFocused, setIsFileJSONFocused] = useState(false);
 	const [editingProfileID, setEditingProfileID] = useState<ProfileID | undefined>();
 	const [profileEditor, setProfileEditor] = useState<ProfileEditorValues | undefined>();
 	const [isImportingProfile, setIsImportingProfile] = useState(false);
@@ -542,7 +589,7 @@ export default function App(): React.JSX.Element {
 			<SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
 				<StatusBar style="light" />
 				<ScrollView contentContainerStyle={styles.container}>
-						<Image source={require('./logo/brainkandy.png')} style={styles.logo} resizeMode="contain" />
+						<Image source={require('./logo/brainkandi.png')} style={styles.logo} resizeMode="contain" />
 						<Text style={styles.status}>{status}</Text>
 						{renderStopSessionButton()}
 
@@ -584,7 +631,16 @@ export default function App(): React.JSX.Element {
 							<Field label="Profile name" value={fileProfileName} onChangeText={setFileProfileName} />
 							<Field label="Device filename" value={fileName} onChangeText={setFileName} autoCapitalize="none" />
 							<Text style={styles.label}>Session JSON</Text>
-							<TextInput multiline value={fileJSON} onChangeText={setFileJSON} style={styles.jsonInput} autoCapitalize="none" />
+							<TextInput
+								multiline
+								value={fileJSON}
+								onBlur={function (): void { setIsFileJSONFocused(false); }}
+								onChangeText={setFileJSON}
+								onFocus={function (): void { setIsFileJSONFocused(true); }}
+								scrollEnabled={isFileJSONFocused}
+								style={[styles.jsonInput, isFileJSONFocused ? styles.jsonInputExpanded : styles.jsonInputCollapsed]}
+								autoCapitalize="none"
+							/>
 							<Button title="Run file directly" disabled={isRunning} onPress={runFileDirectly} />
 							<Button title="Save file profile" disabled={isRunning} onPress={function (): void { void saveFileProfile(); }} />
 						</Section>
@@ -642,8 +698,10 @@ function Field(props: {
 
 	return(
 		<View style={styles.field}>
-			<Text style={styles.label}>{props.label}</Text>
-			{renderFieldHelp(props.label, props.helpText, isShowingHelp, setIsShowingHelp)}
+			<View style={styles.labelRow}>
+				<Text style={styles.label}>{props.label}</Text>
+				{renderFieldHelp(props.label, props.helpText, isShowingHelp, setIsShowingHelp)}
+			</View>
 			<TextInput
 				value={props.value}
 				onChangeText={props.onChangeText}
@@ -725,7 +783,7 @@ function ProfileEditorModal(props: {
 		<Modal animationType="slide" visible={props.visible} onRequestClose={props.onClose}>
 			<SafeAreaView style={styles.documentModal}>
 				<Text style={styles.documentModalTitle}>{props.title}</Text>
-				<ScrollView contentContainerStyle={styles.editorForm}>
+				<ScrollView contentContainerStyle={styles.editorForm} showsHorizontalScrollIndicator={false} showsVerticalScrollIndicator={false}>
 					{renderEditorFields()}
 				</ScrollView>
 				<Button title={props.saveTitle} onPress={props.onSave} />
@@ -791,7 +849,7 @@ async function updateSessionNotification(isRunning: boolean, status: string, not
 	}
 	notificationID.current = await Notifications.scheduleNotificationAsync({
 		content: {
-			title: 'Brain Kandy session',
+			title: 'Brain Kandi session',
 			body: status,
 			categoryIdentifier: sessionNotificationCategoryID,
 			sticky: true
@@ -830,10 +888,13 @@ const styles = StyleSheet.create({
 	sectionTitle: { color: '#75113d', fontSize: 21, fontWeight: '700' },
 	help: { color: '#4e1430', lineHeight: 20 },
 	field: { gap: 4 },
-	label: { color: '#4e1430', fontWeight: '600' },
+	labelRow: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between' },
+	label: { color: '#4e1430', flexShrink: 1, fontWeight: '600' },
 	input: { backgroundColor: '#fff', borderColor: '#bd2b72', borderWidth: 1, borderRadius: 8, color: '#280016', minHeight: 42, paddingHorizontal: 10 },
 	picker: { backgroundColor: '#fff', borderColor: '#bd2b72', borderRadius: 8, borderWidth: 1, color: '#280016' },
-	jsonInput: { backgroundColor: '#fff', borderColor: '#bd2b72', borderWidth: 1, borderRadius: 8, color: '#280016', fontFamily: 'monospace', minHeight: 120, padding: 10, textAlignVertical: 'top' },
+	jsonInput: { backgroundColor: '#fff', borderColor: '#bd2b72', borderWidth: 1, borderRadius: 8, color: '#280016', fontFamily: 'monospace', padding: 10, textAlignVertical: 'top' },
+	jsonInputCollapsed: { height: 96, maxHeight: 96 },
+	jsonInputExpanded: { minHeight: 320 },
 	empty: { color: '#4e1430', fontSize: 16, fontStyle: 'italic' },
 	profile: { alignItems: 'center', backgroundColor: '#fff', borderRadius: 8, flexDirection: 'row', gap: 12, justifyContent: 'space-between', marginTop: 2, padding: 14 },
 	profileText: { flex: 1, gap: 3 },
@@ -846,8 +907,8 @@ const styles = StyleSheet.create({
 	helpDialog: { backgroundColor: '#fff0f8', borderRadius: 14, gap: 16, maxWidth: 480, padding: 22, width: '100%' },
 	helpTitle: { color: '#75113d', fontSize: 22, fontWeight: '700' },
 	helpDialogText: { color: '#4e1430', fontSize: 16, lineHeight: 23 },
-	informationButton: { alignItems: 'center', alignSelf: 'flex-start', backgroundColor: '#666', borderRadius: 16, height: 32, justifyContent: 'center', width: 32 },
-	informationButtonText: { color: '#fff', fontSize: 20, fontWeight: '800' },
+	informationButton: { alignItems: 'center', alignSelf: 'flex-start', backgroundColor: '#2196f3', borderRadius: 13, height: 26, justifyContent: 'center', width: 26 },
+	informationButtonText: { color: '#fff', fontSize: 17, fontWeight: '800' },
 	documentModal: { backgroundColor: '#ff1493', flex: 1, gap: 16, padding: 20 },
 	documentModalTitle: { color: '#fff', fontSize: 26, fontWeight: '800' },
 	documentInput: { backgroundColor: '#fff', borderColor: '#bd2b72', borderRadius: 8, borderWidth: 1, color: '#280016', flex: 1, fontFamily: 'monospace', padding: 12, textAlignVertical: 'top' },

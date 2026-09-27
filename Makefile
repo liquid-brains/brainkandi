@@ -36,7 +36,7 @@ android-users: android-shell.nix
 	NIXPKGS_ACCEPT_ANDROID_SDK_LICENSE=1 nix-shell android-shell.nix --run 'adb shell pm list users'
 
 android-crash-log: android-shell.nix
-	NIXPKGS_ACCEPT_ANDROID_SDK_LICENSE=1 nix-shell android-shell.nix --run 'adb shell am force-stop --user 0 org.brainkandy.app && adb logcat -c && adb shell am start --user 0 -n org.brainkandy.app/.MainActivity >/dev/null && sleep 3 && adb logcat -d -v brief "*:E"'
+	NIXPKGS_ACCEPT_ANDROID_SDK_LICENSE=1 nix-shell android-shell.nix --run 'adb shell am force-stop --user 0 org.brainkandi.app && adb logcat -c && adb shell am start --user 0 -n org.brainkandi.app/.MainActivity >/dev/null && sleep 3 && adb logcat -d -v brief "*:E"'
 
 android-install: android-shell.nix
 	NIXPKGS_ACCEPT_ANDROID_SDK_LICENSE=1 nix-shell android-shell.nix --run 'adb install --user 0 -r android/app/build/outputs/apk/release/app-release.apk'
