@@ -41,4 +41,10 @@ android-crash-log: android-shell.nix
 android-install: android-shell.nix
 	NIXPKGS_ACCEPT_ANDROID_SDK_LICENSE=1 nix-shell android-shell.nix --run 'adb install --user 0 -r android/app/build/outputs/apk/release/app-release.apk'
 
-.PHONY: all typecheck test check bundle-android bundle-linux run-linux apk android-devices android-users android-crash-log android-install
+clean:
+	rm -rf dist dist-linux android
+
+distclean: clean
+	rm -rf node_modules .expo .android-sdk .gradle .ccache
+
+.PHONY: all clean distclean typecheck test check bundle-android bundle-linux run-linux apk android-devices android-users android-crash-log android-install
