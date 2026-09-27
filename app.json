@@ -1,0 +1,28 @@
+{
+  "expo": {
+    "name": "brainkandy",
+    "slug": "brainkandy",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "jsEngine": "jsc",
+    "userInterfaceStyle": "dark",
+    "icon": "./logo/icon-input.png",
+    "splash": {
+      "image": "./logo/brainkandy.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ff1493"
+    },
+    "plugins": [
+      "expo-notifications",
+      "./plugins/with-android-cleartext.js"
+    ],
+    "android": {
+      "package": "org.brainkandy.app",
+      "usesCleartextTraffic": true,
+      "adaptiveIcon": {
+        "foregroundImage": "./logo/icon-input.png",
+        "backgroundColor": "#ff1493"
+      }
+    }
+  }
+}

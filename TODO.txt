@@ -1,0 +1,10 @@
+[x] Change the background color of the sections (e.g., Experiment, File profile, Saved profiles) from light pink to light yellow
+[x] Add a "Stop" to the running session which stops the loop (need to add an AbortController to brainlight) and then sends a stop to the device/server
+[x] The status should also be a notification when on Android/iOS (with a stop button)
+[x] Get rid of "brainkandy" text under the Logo because it already has the text in the logo
+[x] Change the "WHAT DOES THIS DO?" buttons into little grey Information "i" circles next to the parameter name (still big enough to use on a touch device)
+[x] Change the background color of the sections (e.g., Experiment, File profile, Saved profiles) from light yellow to smiley face yellow
+[x] Make editing a profile into a structured form instead of editing JSON
+[x] The icon for the application is created from the logo, but isn't that great because the logo is more square and many things create a circle from the icon -- there is now a logo/icon-input.png which is for this purpose
+[x] Change "SAVE RANDOM PROFILE" into "SAVE PROFILE" (saving a random profile sounds like it will save random data instead of saving the profile with the parameters and kind random)
+[x] Don't mention AI profiles in the future

@@ -1,0 +1,10 @@
+/node_modules/
+/dist/
+/dist-linux/
+/.expo/
+/.android-sdk/
+/.gradle/
+/.ccache/
+/android/
+/linux/
+
