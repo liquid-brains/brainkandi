@@ -584,11 +584,17 @@ export default function App(): React.JSX.Element {
 		return(<Button title="Stop session" color="#75113d" onPress={stopSession} />);
 	}
 
+	function collapseFileJSON(): void {
+		setIsFileJSONFocused(false);
+	}
+
 	return(
 		<SafeAreaProvider>
 			<SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
 				<StatusBar style="light" />
-				<ScrollView contentContainerStyle={styles.container}>
+				<ScrollView
+					contentContainerStyle={styles.container}
+				>
 						<Image source={require('./logo/brainkandi.png')} style={styles.logo} resizeMode="contain" />
 						<Text style={styles.status}>{status}</Text>
 						{renderStopSessionButton()}
@@ -636,6 +642,7 @@ export default function App(): React.JSX.Element {
 								value={fileJSON}
 								onBlur={function (): void { setIsFileJSONFocused(false); }}
 								onChangeText={setFileJSON}
+								onEndEditing={collapseFileJSON}
 								onFocus={function (): void { setIsFileJSONFocused(true); }}
 								scrollEnabled={isFileJSONFocused}
 								style={[styles.jsonInput, isFileJSONFocused ? styles.jsonInputExpanded : styles.jsonInputCollapsed]}
