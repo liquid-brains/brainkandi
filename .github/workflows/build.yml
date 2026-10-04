@@ -1,0 +1,97 @@
+name: Build
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: ${{ matrix.platform }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: Android
+            runner: ubuntu-latest
+            build_target: apk
+            artifact_name: brainkandi-android
+            artifact_path: android/app/build/outputs/apk/release/app-release.apk
+          - platform: Linux
+            runner: ubuntu-latest
+            build_target: bundle-linux
+            artifact_name: brainkandi-linux
+            artifact_path: dist-linux
+          - platform: iOS
+            runner: macos-latest
+            build_target: ipa
+            artifact_name: brainkandi-ios
+            artifact_path: .xcode-derived-data/Build/Products/Release-iphoneos/BrainKandi.app
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/checkout@v4
+        with:
+          repository: liquid-brains/brainlight
+          ref: 9c45c5ab3a8699b0626a4b913c6bbc0a4d4cdd37
+          path: brainlight
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            brainlight/package-lock.json
+
+      - uses: actions/setup-java@v4
+        if: matrix.platform == 'Android'
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: android-actions/setup-android@v3
+        if: matrix.platform == 'Android'
+
+      - name: Install Android NDK
+        if: matrix.platform == 'Android'
+        run: sdkmanager "ndk;27.1.12297006" "cmake;3.22.1"
+
+      - name: Restore build caches
+        uses: actions/cache@v4
+        with:
+          path: |
+            node_modules
+            .gradle
+            .ccache
+            .xcode-derived-data
+            ios
+            brainlight/node_modules
+            brainlight/dist
+            ~/.cache/electron
+            ~/Library/Caches/CocoaPods
+          key: ${{ runner.os }}-${{ matrix.platform }}-build-${{ hashFiles('package-lock.json', 'app.json', 'plugins/**') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ matrix.platform }}-build-
+
+      - name: Prepare brainlight dependency
+        run: |
+          ln -s "$PWD/brainlight" ../brainlight
+          make -C ../brainlight do-npm-pack
+
+      - name: Build
+        env:
+          BUILD_TARGET: ${{ matrix.build_target }}
+        run: make
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: ${{ matrix.artifact_path }}
+          if-no-files-found: error
