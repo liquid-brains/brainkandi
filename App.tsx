@@ -61,7 +61,7 @@ type FormValues = {
 
 const defaultFormValues: FormValues = {
 	basename: 'random',
-	duration: '20',
+	duration: '5',
 	freqMin: '10',
 	freqMax: '',
 	couplingMin: '',
