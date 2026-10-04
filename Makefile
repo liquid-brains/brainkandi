@@ -1,6 +1,8 @@
 SOURCES := $(shell find App.tsx src plugins logo -type f 2>/dev/null)
 BUILD_TARGET ?=
 NDK_VERSION ?= 27.1.12297006
+CCACHE ?= $(shell command -v ccache 2>/dev/null)
+CMAKE_CACHE_LAUNCHERS := $(if $(CCACHE),CMAKE_C_COMPILER_LAUNCHER=$(CCACHE) CMAKE_CXX_COMPILER_LAUNCHER=$(CCACHE))
 
 # Set BRAINKANDI_MAKE_SHELL (for example, from a Nix shellHook) to wrap build commands.
 # Example: make BRAINKANDI_MAKE_SHELL='nix-shell android-shell.nix' apk
@@ -35,7 +37,7 @@ run-linux: bundle-linux
 	npm run linux
 
 apk: $(SOURCES) app.json android-shell.nix node_modules
-	$(call run-in-build-shell,npx expo prebuild --platform android --no-install --non-interactive && mkdir -p .android-sdk/ndk && for entry in "$$ANDROID_HOME"/*; do ln -sfn "$$entry" ".android-sdk/$$(basename "$$entry")"; done && if [ -d "$$ANDROID_HOME/ndk/$(NDK_VERSION)" ]; then ln -sfn "$$ANDROID_HOME/ndk/$(NDK_VERSION)" ".android-sdk/ndk/$(NDK_VERSION)"; elif [ -d "$$ANDROID_HOME/ndk-bundle" ]; then ln -sfn "$$ANDROID_HOME/ndk-bundle" ".android-sdk/ndk/$(NDK_VERSION)"; else echo "Android NDK $(NDK_VERSION) is not installed" >&2; exit 1; fi && ANDROID_HOME="$$PWD/.android-sdk" ANDROID_SDK_ROOT="$$PWD/.android-sdk" GRADLE_USER_HOME="$$PWD/.gradle" CCACHE_DIR="$$PWD/.ccache" CCACHE_BASEDIR="$$PWD" CMAKE_C_COMPILER_LAUNCHER=ccache CMAKE_CXX_COMPILER_LAUNCHER=ccache ./android/gradlew --project-dir android --build-cache assembleRelease && printf "APK: %s\\n" "$$PWD/android/app/build/outputs/apk/release/app-release.apk")
+	$(call run-in-build-shell,npx expo prebuild --platform android --no-install --non-interactive && mkdir -p .android-sdk/ndk && for entry in "$$ANDROID_HOME"/*; do ln -sfn "$$entry" ".android-sdk/$$(basename "$$entry")"; done && if [ -d "$$ANDROID_HOME/ndk/$(NDK_VERSION)" ]; then ln -sfn "$$ANDROID_HOME/ndk/$(NDK_VERSION)" ".android-sdk/ndk/$(NDK_VERSION)"; elif [ -d "$$ANDROID_HOME/ndk-bundle" ]; then ln -sfn "$$ANDROID_HOME/ndk-bundle" ".android-sdk/ndk/$(NDK_VERSION)"; else echo "Android NDK $(NDK_VERSION) is not installed" >&2; exit 1; fi && ANDROID_HOME="$$PWD/.android-sdk" ANDROID_SDK_ROOT="$$PWD/.android-sdk" GRADLE_USER_HOME="$$PWD/.gradle" CCACHE_DIR="$$PWD/.ccache" CCACHE_BASEDIR="$$PWD" CCACHE_COMPILERCHECK=content $(CMAKE_CACHE_LAUNCHERS) ./android/gradlew --project-dir android --build-cache assembleRelease && printf "APK: %s\\n" "$$PWD/android/app/build/outputs/apk/release/app-release.apk")
 
 ipa: $(SOURCES) app.json node_modules
 	$(call run-in-build-shell,npx expo prebuild --platform ios --no-install --non-interactive && cd ios && pod install && xcodebuild -workspace BrainKandi.xcworkspace -scheme BrainKandi -configuration Release -sdk iphoneos -derivedDataPath ../.xcode-derived-data CODE_SIGNING_ALLOWED=NO build && printf "iOS app: %s\\n" "$$PWD/../.xcode-derived-data/Build/Products/Release-iphoneos/BrainKandi.app")

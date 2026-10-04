@@ -61,6 +61,12 @@ jobs:
             "ndk;27.1.12297006" \
             "cmake;3.22.1"
 
+      - name: Install ccache
+        if: matrix.platform == 'Android'
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes ccache
+
       - name: Restore build caches
         uses: actions/cache@v4
         with:
