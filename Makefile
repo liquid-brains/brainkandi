@@ -2,10 +2,10 @@ SOURCES := $(shell find App.tsx src plugins logo -type f 2>/dev/null)
 BUILD_TARGET ?=
 NDK_VERSION ?= 27.1.12297006
 
-# Set MAKE_SHELL (for example, from a Nix shellHook) to wrap build commands.
-# Example: make MAKE_SHELL='nix-shell android-shell.nix' apk
+# Set BRAINKANDI_MAKE_SHELL (for example, from a Nix shellHook) to wrap build commands.
+# Example: make BRAINKANDI_MAKE_SHELL='nix-shell android-shell.nix' apk
 define run-in-build-shell
-$(if $(MAKE_SHELL),$(MAKE_SHELL) --run '$(1)',$(1))
+$(if $(BRAINKANDI_MAKE_SHELL),$(BRAINKANDI_MAKE_SHELL) --run '$(1)',$(1))
 endef
 
 all: check $(BUILD_TARGET)

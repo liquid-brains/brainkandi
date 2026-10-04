@@ -49,8 +49,12 @@ jobs:
       - name: Install Android SDK components
         if: matrix.platform == 'Android'
         run: |
-          yes | sdkmanager --licenses
-          sdkmanager \
+          export ANDROID_HOME="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
+          export ANDROID_SDK_ROOT="$ANDROID_HOME"
+          sdkmanager="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          test -x "$sdkmanager"
+          yes | "$sdkmanager" --licenses
+          "$sdkmanager" \
             "platform-tools" \
             "platforms;android-36" \
             "build-tools;36.0.0" \
@@ -75,6 +79,8 @@ jobs:
       - name: Build
         env:
           BUILD_TARGET: ${{ matrix.build_target }}
+          ANDROID_HOME: /usr/local/lib/android/sdk
+          ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
         run: make
 
       - name: Upload artifact
