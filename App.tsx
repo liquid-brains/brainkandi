@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import {
 	Button,
 	Image,
+	KeyboardAvoidingView,
 	Modal,
 	Platform,
 	Pressable,
@@ -321,6 +322,7 @@ export default function App(): React.JSX.Element {
 	const [isRunning, setIsRunning] = useState(false);
 	const didStopCurrentSession = useRef(false);
 	const sessionNotificationID = useRef<string | undefined>(undefined);
+	const sessionNotificationVersion = useRef(0);
 	const [editingProfileID, setEditingProfileID] = useState<ProfileID | undefined>();
 	const [profileEditor, setProfileEditor] = useState<ProfileEditorValues | undefined>();
 	const [isCreatingProfile, setIsCreatingProfile] = useState(false);
@@ -387,7 +389,8 @@ export default function App(): React.JSX.Element {
 	}, []);
 
 	useEffect(function (): void {
-		void updateSessionNotification(isRunning, status, sessionNotificationID);
+		sessionNotificationVersion.current++;
+		void updateSessionNotification(isRunning, status, sessionNotificationID, sessionNotificationVersion);
 	}, [isRunning, status]);
 
 	const run = useCallback(async function (profile: SessionProfile, operation: (setSessionStatus: (status: string) => void, onGeneratedFile: (fileName: string, data: Record<string, unknown>) => void) => Promise<void>): Promise<void> {
@@ -763,9 +766,11 @@ export default function App(): React.JSX.Element {
 		<SafeAreaProvider>
 			<SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
 				<StatusBar style="light" />
-				<ScrollView
-					contentContainerStyle={styles.container}
-				>
+				<KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.keyboardAvoidingView}>
+					<ScrollView
+						contentContainerStyle={styles.container}
+						keyboardShouldPersistTaps="handled"
+					>
 						<Image source={require('./logo/brainkandi.png')} style={styles.logo} resizeMode="contain" />
 						<Text style={styles.status}>{status}</Text>
 						{renderStopSessionButton()}
@@ -804,7 +809,8 @@ export default function App(): React.JSX.Element {
 							{renderAddDeviceForm()}
 						</Section>
 
-				</ScrollView>
+					</ScrollView>
+				</KeyboardAvoidingView>
 				<ProfileEditorModal
 					title="New profile"
 					visible={isCreatingProfile}
@@ -990,12 +996,14 @@ function ProfileEditorModal(props: {
 	return(
 		<Modal animationType="slide" visible={props.visible} onRequestClose={props.onClose}>
 			<SafeAreaView style={styles.documentModal}>
-				<Text style={styles.documentModalTitle}>{props.title}</Text>
-				<ScrollView contentContainerStyle={styles.editorForm} showsHorizontalScrollIndicator={false} showsVerticalScrollIndicator={false}>
-					{renderEditorFields()}
-				</ScrollView>
-				{props.values === undefined ? null : <Button title={props.saveTitle} onPress={props.onSave} />}
-				<Button title="Cancel" color="#75113d" onPress={props.onClose} />
+				<KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.keyboardAvoidingModal}>
+					<Text style={styles.documentModalTitle}>{props.title}</Text>
+					<ScrollView contentContainerStyle={styles.editorForm} keyboardShouldPersistTaps="handled" showsHorizontalScrollIndicator={false} showsVerticalScrollIndicator={false}>
+						{renderEditorFields()}
+					</ScrollView>
+					{props.values === undefined ? null : <Button title={props.saveTitle} onPress={props.onSave} />}
+					<Button title="Cancel" color="#75113d" onPress={props.onClose} />
+				</KeyboardAvoidingView>
 			</SafeAreaView>
 		</Modal>
 	);
@@ -1013,11 +1021,13 @@ function ProfileDocumentModal(props: {
 	return(
 		<Modal animationType="slide" visible={props.visible} onRequestClose={props.onClose}>
 			<SafeAreaView style={styles.documentModal}>
-				<Text style={styles.documentModalTitle}>{props.title}</Text>
-				<Text style={styles.help}>Paste a shared profile document.</Text>
-				<TextInput multiline value={props.value} onChangeText={props.onChangeText} style={styles.documentInput} autoCapitalize="none" />
-				<Button title={props.saveTitle} onPress={props.onSave} />
-				<Button title="Cancel" color="#75113d" onPress={props.onClose} />
+				<KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.keyboardAvoidingModal}>
+					<Text style={styles.documentModalTitle}>{props.title}</Text>
+					<Text style={styles.help}>Paste a shared profile document.</Text>
+					<TextInput multiline value={props.value} onChangeText={props.onChangeText} style={styles.documentInput} autoCapitalize="none" />
+					<Button title={props.saveTitle} onPress={props.onSave} />
+					<Button title="Cancel" color="#75113d" onPress={props.onClose} />
+				</KeyboardAvoidingView>
 			</SafeAreaView>
 		</Modal>
 	);
@@ -1033,11 +1043,13 @@ function JourneyJournalModal(props: {
 	return(
 		<Modal animationType="slide" visible={props.journey !== undefined} onRequestClose={props.onClose}>
 			<SafeAreaView style={styles.documentModal}>
-				<Text style={styles.documentModalTitle}>Journal entry</Text>
-				<Text style={styles.help}>Optionally record how this journey felt. Leave it blank and save to remove an existing entry.</Text>
-				<TextInput multiline value={props.value} onChangeText={props.onChangeText} style={styles.documentInput} textAlignVertical="top" />
-				<Button title="Save journal entry" onPress={props.onSave} />
-				<Button title="Cancel" color="#75113d" onPress={props.onClose} />
+				<KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.keyboardAvoidingModal}>
+					<Text style={styles.documentModalTitle}>Journal entry</Text>
+					<Text style={styles.help}>Optionally record how this journey felt. Leave it blank and save to remove an existing entry.</Text>
+					<TextInput multiline value={props.value} onChangeText={props.onChangeText} style={styles.documentInput} textAlignVertical="top" />
+					<Button title="Save journal entry" onPress={props.onSave} />
+					<Button title="Cancel" color="#75113d" onPress={props.onClose} />
+				</KeyboardAvoidingView>
 			</SafeAreaView>
 		</Modal>
 	);
@@ -1080,12 +1092,16 @@ async function configureSessionNotifications(): Promise<void> {
 	}
 }
 
-async function updateSessionNotification(isRunning: boolean, status: string, notificationID: React.MutableRefObject<string | undefined>): Promise<void> {
+async function updateSessionNotification(isRunning: boolean, status: string, notificationID: React.MutableRefObject<string | undefined>, notificationVersion: React.MutableRefObject<number>): Promise<void> {
 	if (Platform.OS === 'web') {
 		return;
 	}
+	const updateVersion = notificationVersion.current;
 	if (notificationID.current !== undefined) {
 		await Notifications.dismissNotificationAsync(notificationID.current);
+		if (notificationVersion.current !== updateVersion) {
+			return;
+		}
 		notificationID.current = undefined;
 	}
 	if (!isRunning) {
@@ -1095,7 +1111,10 @@ async function updateSessionNotification(isRunning: boolean, status: string, not
 	if (permissions.status !== 'granted') {
 		return;
 	}
-	notificationID.current = await Notifications.scheduleNotificationAsync({
+	if (notificationVersion.current !== updateVersion) {
+		return;
+	}
+	const scheduledNotificationID = await Notifications.scheduleNotificationAsync({
 		content: {
 			title: 'Brain Kandi session',
 			body: status,
@@ -1104,6 +1123,11 @@ async function updateSessionNotification(isRunning: boolean, status: string, not
 		},
 		trigger: null
 	});
+	if (notificationVersion.current !== updateVersion) {
+		await Notifications.dismissNotificationAsync(scheduledNotificationID);
+		return;
+	}
+	notificationID.current = scheduledNotificationID;
 }
 
 function parseFileData(serialized: string): Record<string, unknown> {
@@ -1128,6 +1152,8 @@ function errorMessage(error: unknown): string {
 
 const styles = StyleSheet.create({
 	safeArea: { flex: 1, backgroundColor: '#ff1493' },
+	keyboardAvoidingView: { flex: 1 },
+	keyboardAvoidingModal: { flex: 1, gap: 16 },
 	container: { padding: 20, gap: 18 },
 	list: { paddingBottom: 36 },
 	logo: { alignSelf: 'center', height: 190, width: 240 },

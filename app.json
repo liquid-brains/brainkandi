@@ -19,6 +19,7 @@
     "android": {
       "package": "org.brainkandi.app",
       "usesCleartextTraffic": true,
+      "softwareKeyboardLayoutMode": "resize",
       "adaptiveIcon": {
         "foregroundImage": "./logo/icon-input.png",
         "backgroundColor": "#ff1493"
