@@ -26,7 +26,7 @@ export class SessionRunner {
 
 	public constructor(private readonly deviceFactory: SessionDeviceFactory) {}
 
-	public async runProfile(deviceAddress: string, profile: SessionProfile, onStatus?: (status: string) => void): Promise<void> {
+	public async runProfile(deviceAddress: string, profile: SessionProfile, onStatus?: (status: string) => void, onGeneratedFile?: (fileName: string, data: Record<string, unknown>) => void): Promise<void> {
 		const device = this.deviceFactory.connect(deviceAddress);
 		this.beginSession(device);
 		try {
@@ -35,7 +35,7 @@ export class SessionRunner {
 					await device.runFileFromData(profile.fileName, profile.fileData, { signal: this.activeSessionSignal() });
 					return;
 				case 'random':
-					await this.runRandom(device, profile.parameters, onStatus);
+					await this.runRandom(device, profile.parameters, onStatus, onGeneratedFile);
 					return;
 				case 'ai':
 					throw(new Error('This profile type is not supported.'));
@@ -81,7 +81,7 @@ export class SessionRunner {
 		return(this.activeAbortController.signal);
 	}
 
-	private async runRandom(device: SessionDevice, parameters: RandomSessionParameters, onStatus?: (status: string) => void): Promise<void> {
+	private async runRandom(device: SessionDevice, parameters: RandomSessionParameters, onStatus?: (status: string) => void, onGeneratedFile?: (fileName: string, data: Record<string, unknown>) => void): Promise<void> {
 		const listenerIDs = [
 			device.on('run-random-start', function (event): void {
 				onStatus?.(`Preparing ${event.fileCount} session part(s) to run.`);
@@ -90,6 +90,7 @@ export class SessionRunner {
 				onStatus?.(`Uploading session part ${event.fileIndex} of ${event.fileCount}.`);
 			}),
 			device.on('run-randomupload-finish-file', function (event): void {
+				onGeneratedFile?.(event.fileName, event.data);
 				onStatus?.(`Uploaded session part ${event.fileIndex} of ${event.fileCount}.`);
 			}),
 			device.on('run-random-run-start-file', function (event): void {

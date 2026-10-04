@@ -16,9 +16,9 @@ describe('random session parameters', function () {
 		expect(function (): void {
 			validateRandomSessionParameters({
 				duration: 20,
-				freqMin: 10,
-				couplingMin: 15,
-				powerMin: 2
+				frequency: { ranges: [{ min: 10 }] },
+				coupling: { min: 15 },
+				power: { min: 2 }
 			});
 		}).not.toThrow();
 	});
@@ -27,10 +27,10 @@ describe('random session parameters', function () {
 		expect(function (): void {
 			validateRandomSessionParameters({
 				duration: 20,
-				freqMin: 10,
-				couplingMax: 15,
-				powerMin: 2
+				frequency: { ranges: [{ min: 10 }] },
+				coupling: { min: 20, max: 15 },
+				power: { min: 2 }
 			});
-		}).toThrow('minimum is required');
+		}).toThrow('minimum must not exceed maximum');
 	});
 });

@@ -1,13 +1,27 @@
 export type RandomSessionParameters = {
 	basename?: string;
 	duration: number;
-	freqMin: number;
-	freqMax?: number;
-	couplingMin?: number;
-	couplingMax?: number;
-	couplingRandomDistribution?: number;
-	powerMin: number;
-	powerMax?: number;
+	frequency: {
+		ranges: FrequencyRange[];
+		perChannel?: boolean;
+	};
+	coupling?: CouplingParameters;
+	power: {
+		min: number;
+		max?: number;
+		perChannel?: boolean;
+	};
+};
+
+export type FrequencyRange = {
+	min: number;
+	max?: number;
+};
+
+export type CouplingParameters = {
+	min: number;
+	max?: number;
+	distribution?: number;
 };
 
 export type FileProfile = {
@@ -47,25 +61,27 @@ export function validateRandomSessionParameters(parameters: RandomSessionParamet
 	if (!Number.isInteger(parameters.duration) || parameters.duration < 1) {
 		throw(new Error('Duration must be a positive whole number of minutes.'));
 	}
-	if (!Number.isFinite(parameters.freqMin)) {
-		throw(new Error('Frequency minimum must be a finite number.'));
+	if (parameters.frequency.ranges.length === 0) {
+		throw(new Error('At least one frequency range is required.'));
 	}
-	if (parameters.freqMax !== undefined && (!Number.isFinite(parameters.freqMax) || parameters.freqMin > parameters.freqMax)) {
-		throw(new Error('Frequency minimum must not exceed frequency maximum.'));
+	for (const range of parameters.frequency.ranges) {
+		if (!Number.isFinite(range.min)) {
+			throw(new Error('Frequency minimum must be a finite number.'));
+		}
+		if (range.max !== undefined && (!Number.isFinite(range.max) || range.min > range.max)) {
+			throw(new Error('Frequency minimum must not exceed frequency maximum.'));
+		}
 	}
-	if (!Number.isFinite(parameters.powerMin)) {
+	if (!Number.isFinite(parameters.power.min)) {
 		throw(new Error('Power minimum must be a finite number.'));
 	}
-	if (parameters.powerMax !== undefined && (!Number.isFinite(parameters.powerMax) || parameters.powerMin > parameters.powerMax)) {
+	if (parameters.power.max !== undefined && (!Number.isFinite(parameters.power.max) || parameters.power.min > parameters.power.max)) {
 		throw(new Error('Power minimum must not exceed power maximum.'));
 	}
-	if (parameters.couplingMax !== undefined && parameters.couplingMin === undefined) {
-		throw(new Error('Cross-coupling minimum is required when a maximum is set.'));
-	}
-	if (parameters.couplingMin !== undefined && parameters.couplingMax !== undefined && parameters.couplingMin > parameters.couplingMax) {
+	if (parameters.coupling !== undefined && parameters.coupling.max !== undefined && parameters.coupling.min > parameters.coupling.max) {
 		throw(new Error('Cross-coupling minimum must not exceed maximum.'));
 	}
-	if (parameters.couplingRandomDistribution !== undefined && (!Number.isInteger(parameters.couplingRandomDistribution) || parameters.couplingRandomDistribution < 0 || parameters.couplingRandomDistribution > 100)) {
+	if (parameters.coupling?.distribution !== undefined && (!Number.isInteger(parameters.coupling.distribution) || parameters.coupling.distribution < 0 || parameters.coupling.distribution > 100)) {
 		throw(new Error('Cross-coupling distribution must be a whole percentage from 0 through 100.'));
 	}
 }

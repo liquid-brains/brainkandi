@@ -23,13 +23,16 @@ import { SessionRunner, VielightDeviceFactory } from './src/core/device-client';
 import { scanLocalSubnet } from './src/core/device-scanner';
 import { AsyncStorageDeviceStore } from './src/core/device-store';
 import { AsyncStorageProfileStore } from './src/core/profile-store';
+import { AsyncStorageJourneyStore, createJourneyID } from './src/core/journey-store';
 import type { SavedDevice } from './src/core/device-store';
+import type { Journey, JourneyFile, JourneyRating } from './src/core/journey-store';
 import { decapsulateSharedProfile, encapsulateSharedProfile } from './src/core/profile-codec';
 import type { ProfileID, RandomSessionParameters, SessionProfile, StoredProfile } from './src/core/profiles';
 import { validateRandomSessionParameters } from './src/core/profiles';
 
 const profileStore = new AsyncStorageProfileStore();
 const deviceStore = new AsyncStorageDeviceStore();
+const journeyStore = new AsyncStorageJourneyStore();
 const sessionRunner = new SessionRunner(new VielightDeviceFactory());
 const keepAwakeTag = 'brainkandi-session';
 const addDevicePickerValue = '__add_new_device__';
@@ -50,25 +53,32 @@ Notifications.setNotificationHandler({
 type FormValues = {
 	basename: string;
 	duration: string;
-	freqMin: string;
-	freqMax: string;
+	frequencyRanges: FrequencyRangeForm[];
+	frequencyPerChannel: boolean;
 	couplingMin: string;
 	couplingMax: string;
 	couplingRandomDistribution: string;
 	powerMin: string;
 	powerMax: string;
+	powerPerChannel: boolean;
+};
+
+type FrequencyRangeForm = {
+	min: string;
+	max: string;
 };
 
 const defaultFormValues: FormValues = {
 	basename: 'random',
 	duration: '5',
-	freqMin: '10',
-	freqMax: '',
+	frequencyRanges: [{ min: '10', max: '' }],
+	frequencyPerChannel: false,
 	couplingMin: '',
 	couplingMax: '',
 	couplingRandomDistribution: '50',
 	powerMin: '1',
-	powerMax: ''
+	powerMax: '',
+	powerPerChannel: true
 };
 
 const defaultFileProfileJSON = JSON.stringify({
@@ -148,30 +158,41 @@ function randomParametersFromForm(values: FormValues): RandomSessionParameters {
 	const couplingMin = optionalNumber(values.couplingMin);
 	const couplingMax = optionalNumber(values.couplingMax);
 	const couplingRandomDistribution = optionalNumber(values.couplingRandomDistribution);
-	const freqMax = optionalNumber(values.freqMax);
 	const powerMax = optionalNumber(values.powerMax);
 	const parameters: RandomSessionParameters = {
 		duration: requiredNumber(values.duration, 'Duration'),
-		freqMin: requiredNumber(values.freqMin, 'Frequency minimum'),
-		powerMin: requiredNumber(values.powerMin, 'Power minimum')
+		frequency: {
+			ranges: values.frequencyRanges.map(function (range): RandomSessionParameters['frequency']['ranges'][number] {
+				const decodedRange: RandomSessionParameters['frequency']['ranges'][number] = {
+					min: requiredNumber(range.min, 'Frequency minimum')
+				};
+				const maximum = optionalNumber(range.max);
+				if (maximum !== undefined) {
+					decodedRange.max = maximum;
+				}
+				return(decodedRange);
+			}),
+			perChannel: values.frequencyPerChannel
+		},
+		power: {
+			min: requiredNumber(values.powerMin, 'Power minimum'),
+			perChannel: values.powerPerChannel
+		}
 	};
 	if (values.basename.trim() !== '') {
 		parameters.basename = values.basename.trim();
 	}
-	if (freqMax !== undefined) {
-		parameters.freqMax = freqMax;
+	if (powerMax !== undefined) {
+		parameters.power.max = powerMax;
 	}
 	if (couplingMin !== undefined) {
-		parameters.couplingMin = couplingMin;
-	}
-	if (couplingMax !== undefined) {
-		parameters.couplingMax = couplingMax;
-	}
-	if (couplingRandomDistribution !== undefined) {
-		parameters.couplingRandomDistribution = couplingRandomDistribution;
-	}
-	if (powerMax !== undefined) {
-		parameters.powerMax = powerMax;
+		parameters.coupling = { min: couplingMin };
+		if (couplingMax !== undefined) {
+			parameters.coupling.max = couplingMax;
+		}
+		if (couplingRandomDistribution !== undefined) {
+			parameters.coupling.distribution = couplingRandomDistribution;
+		}
 	}
 	validateRandomSessionParameters(parameters);
 	return(parameters);
@@ -181,14 +202,81 @@ function formValuesFromRandomParameters(parameters: RandomSessionParameters): Fo
 	return({
 		basename: parameters.basename ?? 'random',
 		duration: String(parameters.duration),
-		freqMin: String(parameters.freqMin),
-		freqMax: parameters.freqMax === undefined ? '' : String(parameters.freqMax),
-		couplingMin: parameters.couplingMin === undefined ? '' : String(parameters.couplingMin),
-		couplingMax: parameters.couplingMax === undefined ? '' : String(parameters.couplingMax),
-		couplingRandomDistribution: parameters.couplingRandomDistribution === undefined ? '' : String(parameters.couplingRandomDistribution),
-		powerMin: String(parameters.powerMin),
-		powerMax: parameters.powerMax === undefined ? '' : String(parameters.powerMax)
+		frequencyRanges: parameters.frequency.ranges.map(function (range): FrequencyRangeForm {
+			return({ min: String(range.min), max: range.max === undefined ? '' : String(range.max) });
+		}),
+		frequencyPerChannel: parameters.frequency.perChannel ?? false,
+		couplingMin: parameters.coupling === undefined ? '' : String(parameters.coupling.min),
+		couplingMax: parameters.coupling?.max === undefined ? '' : String(parameters.coupling.max),
+		couplingRandomDistribution: parameters.coupling?.distribution === undefined ? '50' : String(parameters.coupling.distribution),
+		powerMin: String(parameters.power.min),
+		powerMax: parameters.power.max === undefined ? '' : String(parameters.power.max),
+		powerPerChannel: parameters.power.perChannel ?? true
 	});
+}
+
+function profileFromEditorValues(values: ProfileEditorValues): SessionProfile {
+	if (values.kind === 'file') {
+		return({
+			kind: 'file',
+			name: values.name,
+			fileName: values.fileName,
+			fileData: parseFileData(values.fileJSON)
+		});
+	}
+	return({
+		kind: 'random',
+		name: values.name,
+		parameters: randomParametersFromForm(values.randomForm)
+	});
+}
+
+function initialJourneyFiles(profile: SessionProfile): JourneyFile[] {
+	if (profile.kind !== 'file') {
+		return([]);
+	}
+	return([{
+		fileName: profile.fileName,
+		data: JSON.parse(JSON.stringify(profile.fileData)) as Record<string, unknown>
+	}]);
+}
+
+function increaseJourneyRating(currentRating: JourneyRating | undefined): number {
+	if (currentRating === undefined || currentRating < 0) {
+		return(1);
+	}
+	if (currentRating === 5) {
+		return(0);
+	}
+	return(currentRating + 1);
+}
+
+function decreaseJourneyRating(currentRating: JourneyRating | undefined): number {
+	if (currentRating === undefined || currentRating > 0) {
+		return(-1);
+	}
+	if (currentRating === -5) {
+		return(0);
+	}
+	return(currentRating - 1);
+}
+
+function journeyThumbs(thumb: string, count: number): string {
+	return(thumb.repeat(count));
+}
+
+function JourneyRatingButton(props: {
+	thumb: string;
+	count: number;
+	color: string;
+	disabled: boolean;
+	onPress: () => void;
+}): React.JSX.Element {
+	return(
+		<Pressable accessibilityRole="button" disabled={props.disabled} onPress={props.onPress} style={[styles.ratingButton, { backgroundColor: props.color }, props.disabled ? styles.ratingButtonDisabled : undefined]}>
+			<Text style={styles.ratingThumbs}>{journeyThumbs(props.thumb, props.count)}</Text>
+		</Pressable>
+	);
 }
 
 function profileDescription(profile: SessionProfile): string {
@@ -196,10 +284,26 @@ function profileDescription(profile: SessionProfile): string {
 		case 'file':
 			return(`File: ${profile.fileName}`);
 		case 'random':
-			const frequencyMaximum = profile.parameters.freqMax ?? profile.parameters.freqMin;
-			return(`Random: ${profile.parameters.duration} minute(s), ${profile.parameters.freqMin}-${frequencyMaximum} Hz`);
+			const ranges = profile.parameters.frequency.ranges.map(function (range): string {
+				return(range.max === undefined ? String(range.min) : `${range.min}-${range.max}`);
+			});
+			return(`Random: ${profile.parameters.duration} minute(s), ${ranges.join(', ')} Hz`);
 		case 'ai':
 			return('Unsupported profile type');
+	}
+}
+
+function journeyDescription(journey: Journey): string {
+	const date = new Date(journey.startedAt).toLocaleString();
+	switch (journey.outcome) {
+		case 'running':
+			return(`Started ${date}; currently running.`);
+		case 'completed':
+			return(`Started ${date}; completed.`);
+		case 'stopped-early':
+			return(`Started ${date}; stopped early.`);
+		case 'failed':
+			return(`Started ${date}; did not complete.`);
 	}
 }
 
@@ -211,23 +315,32 @@ export default function App(): React.JSX.Element {
 	const [scannedAddresses, setScannedAddresses] = useState<string[]>([]);
 	const [isAddingDevice, setIsAddingDevice] = useState(false);
 	const [profiles, setProfiles] = useState<StoredProfile[]>([]);
+	const [journeys, setJourneys] = useState<Journey[]>([]);
+	const [visibleJourneyCount, setVisibleJourneyCount] = useState(3);
 	const [status, setStatus] = useState('Ready.');
 	const [isRunning, setIsRunning] = useState(false);
+	const didStopCurrentSession = useRef(false);
 	const sessionNotificationID = useRef<string | undefined>(undefined);
-	const [randomName, setRandomName] = useState('My random session');
-	const [randomForm, setRandomForm] = useState<FormValues>(defaultFormValues);
-	const [fileName, setFileName] = useState('tmp1.vnp0');
-	const [fileProfileName, setFileProfileName] = useState('My file session');
-	const [fileJSON, setFileJSON] = useState(defaultFileProfileJSON);
-	const [isFileJSONFocused, setIsFileJSONFocused] = useState(false);
 	const [editingProfileID, setEditingProfileID] = useState<ProfileID | undefined>();
 	const [profileEditor, setProfileEditor] = useState<ProfileEditorValues | undefined>();
+	const [isCreatingProfile, setIsCreatingProfile] = useState(false);
 	const [isImportingProfile, setIsImportingProfile] = useState(false);
 	const [sharedProfileJSON, setSharedProfileJSON] = useState('');
+	const [journalEntryJourney, setJournalEntryJourney] = useState<Journey | undefined>();
+	const [journalEntryText, setJournalEntryText] = useState('');
+	const [parametersJourney, setParametersJourney] = useState<Journey | undefined>();
 
 	const loadProfiles = useCallback(async function (): Promise<void> {
 		try {
 			setProfiles(await profileStore.list());
+		} catch (error) {
+			setStatus(errorMessage(error));
+		}
+	}, []);
+
+	const loadJourneys = useCallback(async function (): Promise<void> {
+		try {
+			setJourneys(await journeyStore.list());
 		} catch (error) {
 			setStatus(errorMessage(error));
 		}
@@ -257,8 +370,9 @@ export default function App(): React.JSX.Element {
 
 	useEffect(function (): void {
 		void loadProfiles();
+		void loadJourneys();
 		void loadDevices();
-	}, [loadDevices, loadProfiles]);
+	}, [loadDevices, loadJourneys, loadProfiles]);
 
 	useEffect(function (): (() => void) {
 		void configureSessionNotifications();
@@ -276,92 +390,103 @@ export default function App(): React.JSX.Element {
 		void updateSessionNotification(isRunning, status, sessionNotificationID);
 	}, [isRunning, status]);
 
-	const run = useCallback(async function (operation: (setSessionStatus: (status: string) => void) => Promise<void>): Promise<void> {
+	const run = useCallback(async function (profile: SessionProfile, operation: (setSessionStatus: (status: string) => void, onGeneratedFile: (fileName: string, data: Record<string, unknown>) => void) => Promise<void>): Promise<void> {
 		if (isRunning) {
 			return;
 		}
+		const journey: Journey = {
+			id: createJourneyID(),
+			profile: JSON.parse(JSON.stringify(profile)) as SessionProfile,
+			startedAt: new Date().toISOString(),
+			outcome: 'running',
+			files: initialJourneyFiles(profile)
+		};
 		setIsRunning(true);
+		didStopCurrentSession.current = false;
 		setStatus('Session running. Keeping this device awake.');
 		try {
+			await journeyStore.save(journey);
+			await loadJourneys();
 			await activateKeepAwakeAsync(keepAwakeTag);
-			await operation(setStatus);
+			await operation(setStatus, function (fileName, data): void {
+				journey.files.push({ fileName: fileName, data: JSON.parse(JSON.stringify(data)) as Record<string, unknown> });
+			});
+			journey.outcome = 'completed';
 			setStatus('Session finished.');
 		} catch (error) {
+			journey.outcome = didStopCurrentSession.current ? 'stopped-early' : 'failed';
 			setStatus(errorMessage(error));
 		} finally {
+			journey.endedAt = new Date().toISOString();
+			await journeyStore.save(journey);
+			await loadJourneys();
 			deactivateKeepAwake(keepAwakeTag);
 			setIsRunning(false);
 		}
-	}, [isRunning]);
-
-	function updateRandomField(name: keyof FormValues, value: string): void {
-		setRandomForm(function (current): FormValues {
-			return({ ...current, [name]: value });
-		});
-	}
-
-	async function saveRandomProfile(): Promise<void> {
-		try {
-			setStatus('Saving random profile...');
-			const profile: SessionProfile = {
-				kind: 'random',
-				name: randomName,
-				parameters: randomParametersFromForm(randomForm)
-			};
-			await profileStore.save(profile);
-			await loadProfiles();
-			setStatus(`Saved ${profile.name}.`);
-		} catch (error) {
-			setStatus(errorMessage(error));
-		}
-	}
-
-	function runExperiment(): void {
-		void run(async function (setSessionStatus): Promise<void> {
-			const parameters = randomParametersFromForm(randomForm);
-			await sessionRunner.runExperiment(deviceAddress, parameters, setSessionStatus);
-		});
-	}
+	}, [isRunning, loadJourneys]);
 
 	function stopSession(): void {
+		didStopCurrentSession.current = true;
 		sessionRunner.stopCurrentSession();
 		setStatus('Stopping session...');
 	}
 
-	async function saveFileProfile(): Promise<void> {
+	function runSavedProfile(profile: StoredProfile): void {
+		void run(profile.profile, async function (setSessionStatus, onGeneratedFile): Promise<void> {
+			await sessionRunner.runProfile(deviceAddress, profile.profile, setSessionStatus, onGeneratedFile);
+		});
+	}
+
+	async function rateJourney(journey: Journey, rating: JourneyRating): Promise<void> {
 		try {
-			setStatus('Saving file profile...');
-			const data = parseFileData(fileJSON);
-			const profile: SessionProfile = {
-				kind: 'file',
-				name: fileProfileName,
-				fileName: fileName,
-				fileData: data
-			};
-			await profileStore.save(profile);
-			await loadProfiles();
-			setStatus(`Saved ${profile.name}.`);
+			const updatedJourney: Journey = { ...journey };
+			const updatedRating = rating === 1 ? increaseJourneyRating(journey.rating) : decreaseJourneyRating(journey.rating);
+			if (updatedRating === 0) {
+				delete updatedJourney.rating;
+			} else {
+				updatedJourney.rating = updatedRating;
+			}
+			await journeyStore.save(updatedJourney);
+			await loadJourneys();
 		} catch (error) {
 			setStatus(errorMessage(error));
 		}
 	}
 
-	function runFileDirectly(): void {
-		void run(async function (): Promise<void> {
-			const profile: SessionProfile = {
-				kind: 'file',
-				name: fileProfileName,
-				fileName: fileName,
-				fileData: parseFileData(fileJSON)
-			};
-			await sessionRunner.runProfile(deviceAddress, profile);
-		});
+	async function deleteJourney(journey: Journey): Promise<void> {
+		try {
+			await journeyStore.remove(journey.id);
+			await loadJourneys();
+			setStatus(`Deleted journey for ${journey.profile.name}.`);
+		} catch (error) {
+			setStatus(errorMessage(error));
+		}
 	}
 
-	function runSavedProfile(profile: StoredProfile): void {
-		void run(async function (setSessionStatus): Promise<void> {
-			await sessionRunner.runProfile(deviceAddress, profile.profile, setSessionStatus);
-		});
+	function openJournalEntry(journey: Journey): void {
+		setJournalEntryJourney(journey);
+		setJournalEntryText(journey.journalEntry ?? '');
+	}
+
+	async function saveJournalEntry(): Promise<void> {
+		if (journalEntryJourney === undefined) {
+			return;
+		}
+		try {
+			const text = journalEntryText.trim();
+			const updatedJourney: Journey = { ...journalEntryJourney };
+			if (text === '') {
+				delete updatedJourney.journalEntry;
+			} else {
+				updatedJourney.journalEntry = text;
+			}
+			await journeyStore.save(updatedJourney);
+			await loadJourneys();
+			setJournalEntryJourney(undefined);
+			setJournalEntryText('');
+		} catch (error) {
+			setStatus(errorMessage(error));
+		}
 	}
 
 	async function deleteProfile(profile: StoredProfile): Promise<void> {
@@ -405,11 +530,54 @@ export default function App(): React.JSX.Element {
 		setIsImportingProfile(true);
 	}
 
+	function openProfileCreation(): void {
+		setEditingProfileID(undefined);
+		setProfileEditor(undefined);
+		setIsCreatingProfile(true);
+	}
+
+	function selectNewProfileKind(kind: ProfileEditorValues['kind']): void {
+		if (kind === 'file') {
+			setProfileEditor({
+				kind: 'file',
+				name: 'My file session',
+				fileName: 'tmp1.vnp0',
+				fileJSON: defaultFileProfileJSON,
+				randomForm: defaultFormValues
+			});
+			return;
+		}
+		setProfileEditor({
+			kind: 'random',
+			name: 'My random session',
+			fileName: 'session.vnp0',
+			fileJSON: '{}',
+			randomForm: defaultFormValues
+		});
+	}
+
 	function closeProfileDocumentModal(): void {
 		setEditingProfileID(undefined);
 		setProfileEditor(undefined);
+		setIsCreatingProfile(false);
 		setIsImportingProfile(false);
 		setSharedProfileJSON('');
+	}
+
+	async function saveNewProfile(): Promise<void> {
+		if (profileEditor === undefined) {
+			setStatus('Select a profile type first.');
+			return;
+		}
+		try {
+			const profile = profileFromEditorValues(profileEditor);
+			await profileStore.save(profile);
+			await loadProfiles();
+			closeProfileDocumentModal();
+			setStatus(`Saved ${profile.name}.`);
+		} catch (error) {
+			setStatus(errorMessage(error));
+		}
 	}
 
 	async function saveEditedProfile(): Promise<void> {
@@ -418,21 +586,7 @@ export default function App(): React.JSX.Element {
 			return;
 		}
 		try {
-			let profile: SessionProfile;
-			if (profileEditor.kind === 'file') {
-				profile = {
-					kind: 'file',
-					name: profileEditor.name,
-					fileName: profileEditor.fileName,
-					fileData: parseFileData(profileEditor.fileJSON)
-				};
-			} else {
-				profile = {
-					kind: 'random',
-					name: profileEditor.name,
-					parameters: randomParametersFromForm(profileEditor.randomForm)
-				};
-			}
+			const profile = profileFromEditorValues(profileEditor);
 			await profileStore.save(profile, editingProfileID);
 			await loadProfiles();
 			closeProfileDocumentModal();
@@ -541,6 +695,27 @@ export default function App(): React.JSX.Element {
 		);
 	}
 
+	function renderJourney(journey: Journey): React.JSX.Element {
+		return(
+			<View key={journey.id} style={styles.journey}>
+				<View style={styles.profileText}>
+					<Text style={styles.profileName}>{journey.profile.name}</Text>
+					<Text style={styles.profileDescription}>{profileDescription(journey.profile)}</Text>
+					<Text style={styles.profileDescription}>{journeyDescription(journey)}</Text>
+					<Text style={styles.profileDescription}>{journey.files.length} file(s) recorded.</Text>
+					{journey.journalEntry === undefined ? null : <Text style={styles.journalEntry}>{journey.journalEntry}</Text>}
+				</View>
+				<View style={styles.profileButtons}>
+					<JourneyRatingButton thumb="👍" count={journey.rating !== undefined && journey.rating > 0 ? journey.rating : 1} color={journey.rating !== undefined && journey.rating > 0 ? '#198754' : '#666'} disabled={journey.outcome === 'running'} onPress={function (): void { void rateJourney(journey, 1); }} />
+					<JourneyRatingButton thumb="👎" count={journey.rating !== undefined && journey.rating < 0 ? Math.abs(journey.rating) : 1} color={journey.rating !== undefined && journey.rating < 0 ? '#c62828' : '#666'} disabled={journey.outcome === 'running'} onPress={function (): void { void rateJourney(journey, -1); }} />
+					<Button title="Journal entry" disabled={journey.outcome === 'running'} onPress={function (): void { openJournalEntry(journey); }} />
+					<Button title="View parameters" disabled={journey.outcome === 'running'} onPress={function (): void { setParametersJourney(journey); }} />
+					<Button title="Delete" color="#75113d" disabled={journey.outcome === 'running'} onPress={function (): void { void deleteJourney(journey); }} />
+				</View>
+			</View>
+		);
+	}
+
 	function renderAddDeviceForm(): React.ReactNode {
 		if (!isAddingDevice) {
 			return(null);
@@ -584,10 +759,6 @@ export default function App(): React.JSX.Element {
 		return(<Button title="Stop session" color="#75113d" onPress={stopSession} />);
 	}
 
-	function collapseFileJSON(): void {
-		setIsFileJSONFocused(false);
-	}
-
 	return(
 		<SafeAreaProvider>
 			<SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
@@ -598,6 +769,23 @@ export default function App(): React.JSX.Element {
 						<Image source={require('./logo/brainkandi.png')} style={styles.logo} resizeMode="contain" />
 						<Text style={styles.status}>{status}</Text>
 						{renderStopSessionButton()}
+
+						<Section title="Saved profiles">
+							<Text style={styles.help}>Share a profile to send it without a central server.</Text>
+							<Button title="New profile" disabled={isRunning} onPress={openProfileCreation} />
+							<Button title="Import shared profile" disabled={isRunning} onPress={openProfileImport} />
+							{profiles.map(function (profile): React.JSX.Element {
+								return(renderProfile(profile));
+							})}
+							{renderEmptyProfiles()}
+						</Section>
+
+						<Section title="Journeys">
+							<Text style={styles.help}>Each session keeps the profile settings it started with, even if that profile is later changed.</Text>
+							{journeys.slice(0, visibleJourneyCount).map(renderJourney)}
+							{journeys.length === 0 ? <Text style={styles.empty}>No journeys yet.</Text> : null}
+							{journeys.length > visibleJourneyCount ? <Button title={`View ${Math.min(10, journeys.length - visibleJourneyCount)} more journeys`} onPress={function (): void { setVisibleJourneyCount(function (count): number { return(count + 10); }); }} /> : null}
+						</Section>
 
 						<Section title="Device">
 							<Text style={styles.label}>Previously used device</Text>
@@ -616,56 +804,23 @@ export default function App(): React.JSX.Element {
 							{renderAddDeviceForm()}
 						</Section>
 
-						<Section title="Experiment">
-							<Text style={styles.help}>Run randomized session settings without saving a profile.</Text>
-							<Field label="Generated file name prefix" value={randomForm.basename} onChangeText={function (value): void { updateRandomField('basename', value); }} autoCapitalize="none" helpText="The beginning of each generated filename on the device." />
-							<Field label="Duration (minutes)" value={randomForm.duration} onChangeText={function (value): void { updateRandomField('duration', value); }} keyboardType="numeric" helpText="The total session duration, in minutes." />
-							<Field label="Frequency minimum (Hz)" value={randomForm.freqMin} onChangeText={function (value): void { updateRandomField('freqMin', value); }} keyboardType="numeric" helpText="The lowest stimulation frequency used during the session." />
-							<Field label="Frequency maximum (Hz, optional)" value={randomForm.freqMax} onChangeText={function (value): void { updateRandomField('freqMax', value); }} keyboardType="numeric" helpText="The highest stimulation frequency available. Leave blank to use the frequency minimum throughout the session." />
-							<Field label="Power minimum" value={randomForm.powerMin} onChangeText={function (value): void { updateRandomField('powerMin', value); }} keyboardType="numeric" helpText="The lowest power value used during the session." />
-							<Field label="Power maximum (optional)" value={randomForm.powerMax} onChangeText={function (value): void { updateRandomField('powerMax', value); }} keyboardType="numeric" helpText="The highest power value available. Leave blank to use the power minimum throughout the session." />
-							<Field label="Cross-coupling minimum (optional)" value={randomForm.couplingMin} onChangeText={function (value): void { updateRandomField('couplingMin', value); }} keyboardType="numeric" helpText="Enables cross-coupling and sets its lowest frequency. Leave both cross-coupling fields blank to disable cross-coupling." />
-							<Field label="Cross-coupling maximum (optional)" value={randomForm.couplingMax} onChangeText={function (value): void { updateRandomField('couplingMax', value); }} keyboardType="numeric" helpText="The highest cross-coupling frequency. Leave blank to use the cross-coupling minimum." />
-							<Field label="Cross-coupling distribution (%)" value={randomForm.couplingRandomDistribution} onChangeText={function (value): void { updateRandomField('couplingRandomDistribution', value); }} keyboardType="numeric" helpText="For each active module, the percentage chance that it applies the cross-coupling setting." />
-							<Field label="Profile name" value={randomName} onChangeText={setRandomName} />
-							<Button title="Run experiment" disabled={isRunning} onPress={runExperiment} />
-							<Button title="Save profile" disabled={isRunning} onPress={function (): void { void saveRandomProfile(); }} />
-						</Section>
-
-						<Section title="File profile">
-							<Text style={styles.help}>Running a file uploads it to the device, runs it, then leaves the uploaded file on the device.</Text>
-							<Field label="Profile name" value={fileProfileName} onChangeText={setFileProfileName} />
-							<Field label="Device filename" value={fileName} onChangeText={setFileName} autoCapitalize="none" />
-							<Text style={styles.label}>Session JSON</Text>
-							<TextInput
-								multiline
-								value={fileJSON}
-								onBlur={function (): void { setIsFileJSONFocused(false); }}
-								onChangeText={setFileJSON}
-								onEndEditing={collapseFileJSON}
-								onFocus={function (): void { setIsFileJSONFocused(true); }}
-								scrollEnabled={isFileJSONFocused}
-								style={[styles.jsonInput, isFileJSONFocused ? styles.jsonInputExpanded : styles.jsonInputCollapsed]}
-								autoCapitalize="none"
-							/>
-							<Button title="Run file directly" disabled={isRunning} onPress={runFileDirectly} />
-							<Button title="Save file profile" disabled={isRunning} onPress={function (): void { void saveFileProfile(); }} />
-						</Section>
-
-						<Section title="Saved profiles">
-							<Text style={styles.help}>Share a profile to send it without a central server.</Text>
-							<Button title="Import shared profile" disabled={isRunning} onPress={openProfileImport} />
-							{profiles.map(function (profile): React.JSX.Element {
-								return(renderProfile(profile));
-							})}
-							{renderEmptyProfiles()}
-						</Section>
 				</ScrollView>
+				<ProfileEditorModal
+					title="New profile"
+					visible={isCreatingProfile}
+					values={profileEditor}
+					onChangeValues={updateProfileEditor}
+					onSelectKind={selectNewProfileKind}
+					onClose={closeProfileDocumentModal}
+					onSave={function (): void { void saveNewProfile(); }}
+					saveTitle="Save profile"
+				/>
 				<ProfileEditorModal
 					title="Edit profile"
 					visible={editingProfileID !== undefined}
 					values={profileEditor}
 					onChangeValues={updateProfileEditor}
+					onSelectKind={selectNewProfileKind}
 					onClose={closeProfileDocumentModal}
 					onSave={function (): void { void saveEditedProfile(); }}
 					saveTitle="Save changes"
@@ -679,6 +834,14 @@ export default function App(): React.JSX.Element {
 					onSave={function (): void { void importSharedProfile(); }}
 					saveTitle="Import profile"
 				/>
+				<JourneyJournalModal
+					journey={journalEntryJourney}
+					value={journalEntryText}
+					onChangeText={setJournalEntryText}
+					onClose={function (): void { setJournalEntryJourney(undefined); setJournalEntryText(''); }}
+					onSave={function (): void { void saveJournalEntry(); }}
+				/>
+				<JourneyParametersModal journey={parametersJourney} onClose={function (): void { setParametersJourney(undefined); }} />
 			</SafeAreaView>
 		</SafeAreaProvider>
 	);
@@ -752,37 +915,75 @@ function ProfileEditorModal(props: {
 	visible: boolean;
 	values: ProfileEditorValues | undefined;
 	onChangeValues: (change: (current: ProfileEditorValues) => ProfileEditorValues) => void;
+	onSelectKind: (kind: ProfileEditorValues['kind']) => void;
 	onClose: () => void;
 	onSave: () => void;
 	saveTitle: string;
 }): React.JSX.Element {
+	function updateRandomForm(change: (form: FormValues) => FormValues): void {
+		props.onChangeValues(function (current): ProfileEditorValues {
+			return({ ...current, randomForm: change(current.randomForm) });
+		});
+	}
+
+	function updateFrequencyRange(index: number, name: keyof FrequencyRangeForm, value: string): void {
+		updateRandomForm(function (form): FormValues {
+			const frequencyRanges = form.frequencyRanges.map(function (range, rangeIndex): FrequencyRangeForm {
+				if (rangeIndex !== index) {
+					return(range);
+				}
+				return({ ...range, [name]: value });
+			});
+			return({ ...form, frequencyRanges: frequencyRanges });
+		});
+	}
+
 	function renderEditorFields(): React.ReactNode {
 		if (props.values === undefined) {
-			return(null);
+			return(
+				<Section title="Profile type">
+					<Text style={styles.help}>Choose the type of profile to create.</Text>
+					<View style={styles.profileTypeChoices}>
+						<Button title="New random profile" onPress={function (): void { props.onSelectKind('random'); }} />
+						<Button title="New file profile" onPress={function (): void { props.onSelectKind('file'); }} />
+					</View>
+				</Section>
+			);
 		}
 		if (props.values.kind === 'file') {
 			return(
-				<>
+				<Section title="File profile">
 					<Field label="Profile name" value={props.values.name} onChangeText={function (name): void { props.onChangeValues(function (current): ProfileEditorValues { return({ ...current, name: name }); }); }} />
 					<Field label="Device filename" value={props.values.fileName} onChangeText={function (fileName): void { props.onChangeValues(function (current): ProfileEditorValues { return({ ...current, fileName: fileName }); }); }} autoCapitalize="none" />
 					<Text style={styles.label}>Session JSON</Text>
 					<TextInput multiline value={props.values.fileJSON} onChangeText={function (fileJSON): void { props.onChangeValues(function (current): ProfileEditorValues { return({ ...current, fileJSON: fileJSON }); }); }} style={styles.jsonInput} autoCapitalize="none" />
-				</>
+				</Section>
 			);
 		}
 		return(
-			<>
+			<Section title="Random profile">
 				<Field label="Profile name" value={props.values.name} onChangeText={function (name): void { props.onChangeValues(function (current): ProfileEditorValues { return({ ...current, name: name }); }); }} />
-				<Field label="Generated file name prefix" value={props.values.randomForm.basename} onChangeText={function (basename): void { props.onChangeValues(function (current): ProfileEditorValues { return({ ...current, randomForm: { ...current.randomForm, basename: basename } }); }); }} autoCapitalize="none" />
-				<Field label="Duration (minutes)" value={props.values.randomForm.duration} onChangeText={function (duration): void { props.onChangeValues(function (current): ProfileEditorValues { return({ ...current, randomForm: { ...current.randomForm, duration: duration } }); }); }} keyboardType="numeric" />
-				<Field label="Frequency minimum (Hz)" value={props.values.randomForm.freqMin} onChangeText={function (freqMin): void { props.onChangeValues(function (current): ProfileEditorValues { return({ ...current, randomForm: { ...current.randomForm, freqMin: freqMin } }); }); }} keyboardType="numeric" />
-				<Field label="Frequency maximum (Hz, optional)" value={props.values.randomForm.freqMax} onChangeText={function (freqMax): void { props.onChangeValues(function (current): ProfileEditorValues { return({ ...current, randomForm: { ...current.randomForm, freqMax: freqMax } }); }); }} keyboardType="numeric" />
-				<Field label="Power minimum" value={props.values.randomForm.powerMin} onChangeText={function (powerMin): void { props.onChangeValues(function (current): ProfileEditorValues { return({ ...current, randomForm: { ...current.randomForm, powerMin: powerMin } }); }); }} keyboardType="numeric" />
-				<Field label="Power maximum (optional)" value={props.values.randomForm.powerMax} onChangeText={function (powerMax): void { props.onChangeValues(function (current): ProfileEditorValues { return({ ...current, randomForm: { ...current.randomForm, powerMax: powerMax } }); }); }} keyboardType="numeric" />
-				<Field label="Cross-coupling minimum (optional)" value={props.values.randomForm.couplingMin} onChangeText={function (couplingMin): void { props.onChangeValues(function (current): ProfileEditorValues { return({ ...current, randomForm: { ...current.randomForm, couplingMin: couplingMin } }); }); }} keyboardType="numeric" />
-				<Field label="Cross-coupling maximum (optional)" value={props.values.randomForm.couplingMax} onChangeText={function (couplingMax): void { props.onChangeValues(function (current): ProfileEditorValues { return({ ...current, randomForm: { ...current.randomForm, couplingMax: couplingMax } }); }); }} keyboardType="numeric" />
-				<Field label="Cross-coupling distribution (%)" value={props.values.randomForm.couplingRandomDistribution} onChangeText={function (couplingRandomDistribution): void { props.onChangeValues(function (current): ProfileEditorValues { return({ ...current, randomForm: { ...current.randomForm, couplingRandomDistribution: couplingRandomDistribution } }); }); }} keyboardType="numeric" />
-			</>
+				<Field label="Generated file name prefix" value={props.values.randomForm.basename} onChangeText={function (basename): void { props.onChangeValues(function (current): ProfileEditorValues { return({ ...current, randomForm: { ...current.randomForm, basename: basename } }); }); }} autoCapitalize="none" helpText="The beginning of each generated filename on the device." />
+				<Field label="Duration (minutes)" value={props.values.randomForm.duration} onChangeText={function (duration): void { props.onChangeValues(function (current): ProfileEditorValues { return({ ...current, randomForm: { ...current.randomForm, duration: duration } }); }); }} keyboardType="numeric" helpText="The total session duration, in minutes." />
+				<Text style={styles.label}>Frequency ranges</Text>
+				{props.values.randomForm.frequencyRanges.map(function (range, index): React.JSX.Element {
+					return(
+						<View key={index} style={styles.frequencyRange}>
+							<Field label={`Range ${index + 1} minimum (Hz)`} value={range.min} onChangeText={function (min): void { updateFrequencyRange(index, 'min', min); }} keyboardType="numeric" helpText="The lowest frequency in this range." />
+							<Field label={`Range ${index + 1} maximum (Hz, optional)`} value={range.max} onChangeText={function (max): void { updateFrequencyRange(index, 'max', max); }} keyboardType="numeric" helpText="The highest frequency in this range. Leave blank for one exact frequency." />
+							{props.values!.randomForm.frequencyRanges.length > 1 ? <Button title="Remove frequency range" color="#75113d" onPress={function (): void { updateRandomForm(function (form): FormValues { return({ ...form, frequencyRanges: form.frequencyRanges.filter(function (_, rangeIndex): boolean { return(rangeIndex !== index); }) }); }); }} /> : null}
+						</View>
+					);
+				})}
+				<Button title="Add frequency range" onPress={function (): void { updateRandomForm(function (form): FormValues { return({ ...form, frequencyRanges: [...form.frequencyRanges, { min: '', max: '' }] }); }); }} />
+				<Button title={`Frequency randomization: ${props.values.randomForm.frequencyPerChannel ? 'per channel' : 'per session'}`} onPress={function (): void { updateRandomForm(function (form): FormValues { return({ ...form, frequencyPerChannel: !form.frequencyPerChannel }); }); }} />
+				<Field label="Power minimum" value={props.values.randomForm.powerMin} onChangeText={function (powerMin): void { updateRandomForm(function (form): FormValues { return({ ...form, powerMin: powerMin }); }); }} keyboardType="numeric" helpText="The lowest power value used during the session." />
+				<Field label="Power maximum (optional)" value={props.values.randomForm.powerMax} onChangeText={function (powerMax): void { updateRandomForm(function (form): FormValues { return({ ...form, powerMax: powerMax }); }); }} keyboardType="numeric" helpText="The highest power value available. Leave blank to use the power minimum throughout the session." />
+				<Button title={`Power randomization: ${props.values.randomForm.powerPerChannel ? 'per channel' : 'per session'}`} onPress={function (): void { updateRandomForm(function (form): FormValues { return({ ...form, powerPerChannel: !form.powerPerChannel }); }); }} />
+				<Field label="Cross-coupling minimum (optional)" value={props.values.randomForm.couplingMin} onChangeText={function (couplingMin): void { updateRandomForm(function (form): FormValues { return({ ...form, couplingMin: couplingMin }); }); }} keyboardType="numeric" helpText="Enables cross-coupling and sets its lowest frequency. Leave both cross-coupling fields blank to disable cross-coupling." />
+				<Field label="Cross-coupling maximum (optional)" value={props.values.randomForm.couplingMax} onChangeText={function (couplingMax): void { updateRandomForm(function (form): FormValues { return({ ...form, couplingMax: couplingMax }); }); }} keyboardType="numeric" helpText="The highest cross-coupling frequency. Leave blank to use the cross-coupling minimum." />
+				<Field label="Cross-coupling distribution (%)" value={props.values.randomForm.couplingRandomDistribution} onChangeText={function (couplingRandomDistribution): void { updateRandomForm(function (form): FormValues { return({ ...form, couplingRandomDistribution: couplingRandomDistribution }); }); }} keyboardType="numeric" helpText="For each active module, the percentage chance that it applies the cross-coupling setting." />
+			</Section>
 		);
 	}
 
@@ -793,7 +994,7 @@ function ProfileEditorModal(props: {
 				<ScrollView contentContainerStyle={styles.editorForm} showsHorizontalScrollIndicator={false} showsVerticalScrollIndicator={false}>
 					{renderEditorFields()}
 				</ScrollView>
-				<Button title={props.saveTitle} onPress={props.onSave} />
+				{props.values === undefined ? null : <Button title={props.saveTitle} onPress={props.onSave} />}
 				<Button title="Cancel" color="#75113d" onPress={props.onClose} />
 			</SafeAreaView>
 		</Modal>
@@ -817,6 +1018,46 @@ function ProfileDocumentModal(props: {
 				<TextInput multiline value={props.value} onChangeText={props.onChangeText} style={styles.documentInput} autoCapitalize="none" />
 				<Button title={props.saveTitle} onPress={props.onSave} />
 				<Button title="Cancel" color="#75113d" onPress={props.onClose} />
+			</SafeAreaView>
+		</Modal>
+	);
+}
+
+function JourneyJournalModal(props: {
+	journey: Journey | undefined;
+	value: string;
+	onChangeText: (value: string) => void;
+	onClose: () => void;
+	onSave: () => void;
+}): React.JSX.Element {
+	return(
+		<Modal animationType="slide" visible={props.journey !== undefined} onRequestClose={props.onClose}>
+			<SafeAreaView style={styles.documentModal}>
+				<Text style={styles.documentModalTitle}>Journal entry</Text>
+				<Text style={styles.help}>Optionally record how this journey felt. Leave it blank and save to remove an existing entry.</Text>
+				<TextInput multiline value={props.value} onChangeText={props.onChangeText} style={styles.documentInput} textAlignVertical="top" />
+				<Button title="Save journal entry" onPress={props.onSave} />
+				<Button title="Cancel" color="#75113d" onPress={props.onClose} />
+			</SafeAreaView>
+		</Modal>
+	);
+}
+
+function JourneyParametersModal(props: {
+	journey: Journey | undefined;
+	onClose: () => void;
+}): React.JSX.Element {
+	const serializedProfile = props.journey === undefined ? '' : JSON.stringify({
+		profile: props.journey.profile,
+		files: props.journey.files
+	}, undefined, 2);
+	return(
+		<Modal animationType="slide" visible={props.journey !== undefined} onRequestClose={props.onClose}>
+			<SafeAreaView style={styles.documentModal}>
+				<Text style={styles.documentModalTitle}>Journey parameters</Text>
+				<Text style={styles.help}>These are the exact profile settings and device files saved when this journey began.</Text>
+				<TextInput editable={false} multiline value={serializedProfile} style={styles.documentInput} textAlignVertical="top" />
+				<Button title="Close" onPress={props.onClose} />
 			</SafeAreaView>
 		</Modal>
 	);
@@ -904,10 +1145,15 @@ const styles = StyleSheet.create({
 	jsonInputExpanded: { minHeight: 320 },
 	empty: { color: '#4e1430', fontSize: 16, fontStyle: 'italic' },
 	profile: { alignItems: 'center', backgroundColor: '#fff', borderRadius: 8, flexDirection: 'row', gap: 12, justifyContent: 'space-between', marginTop: 2, padding: 14 },
+	journey: { alignItems: 'center', backgroundColor: '#fff', borderRadius: 8, flexDirection: 'row', gap: 12, justifyContent: 'space-between', marginTop: 2, padding: 14 },
 	profileText: { flex: 1, gap: 3 },
 	profileName: { color: '#4e1430', fontSize: 17, fontWeight: '700' },
 	profileDescription: { color: '#4e1430' },
+	journalEntry: { color: '#4e1430', fontStyle: 'italic', lineHeight: 20, marginTop: 4 },
 	profileButtons: { gap: 5 },
+	ratingButton: { alignItems: 'center', borderRadius: 4, minHeight: 32, justifyContent: 'center', paddingHorizontal: 6 },
+	ratingButtonDisabled: { opacity: 0.4 },
+	ratingThumbs: { color: '#fff', fontSize: 20, letterSpacing: -10 },
 	addDevice: { gap: 10 },
 	scannedDevice: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between' },
 	helpOverlay: { alignItems: 'center', backgroundColor: 'rgba(0, 0, 0, 0.5)', flex: 1, justifyContent: 'center', padding: 24 },
@@ -919,5 +1165,7 @@ const styles = StyleSheet.create({
 	documentModal: { backgroundColor: '#ff1493', flex: 1, gap: 16, padding: 20 },
 	documentModalTitle: { color: '#fff', fontSize: 26, fontWeight: '800' },
 	documentInput: { backgroundColor: '#fff', borderColor: '#bd2b72', borderRadius: 8, borderWidth: 1, color: '#280016', flex: 1, fontFamily: 'monospace', padding: 12, textAlignVertical: 'top' },
-	editorForm: { gap: 10, paddingBottom: 8 }
+	editorForm: { gap: 10, paddingBottom: 8 },
+	profileTypeChoices: { gap: 10 },
+	frequencyRange: { borderColor: '#bd2b72', borderRadius: 8, borderWidth: 1, gap: 8, padding: 10 }
 });

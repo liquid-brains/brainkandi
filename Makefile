@@ -1,4 +1,4 @@
-SOURCES := $(shell find App.tsx src plugins logo -type f 2>/dev/null)
+SOURCES := $(shell find App.tsx src plugins logo linux -type f 2>/dev/null)
 BUILD_TARGET ?=
 NDK_VERSION ?= 27.1.12297006
 CCACHE ?= $(shell command -v ccache 2>/dev/null)
