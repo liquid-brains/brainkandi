@@ -13,9 +13,9 @@
     "linux": "electron linux/main.cjs"
   },
   "dependencies": {
+    "@liquid-brains/brainlight": "1.0.4",
     "@react-native-async-storage/async-storage": "^2.2.0",
     "@react-native-picker/picker": "^2.11.1",
-    "brainlight": "file:../brainlight/brainlight-1.0.1.tgz",
     "expo": "^57.0.25",
     "expo-clipboard": "~57.0.2",
     "expo-keep-awake": "~57.0.2",

@@ -1,4 +1,4 @@
-import { VielightDevice } from 'brainlight/lib/neuropro/index.js';
+import { VielightDevice } from '@liquid-brains/brainlight/lib/neuropro/index.js';
 
 import type { RandomSessionParameters, SessionProfile } from './profiles';
 

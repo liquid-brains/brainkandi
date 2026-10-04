@@ -23,6 +23,9 @@
         "foregroundImage": "./logo/icon-input.png",
         "backgroundColor": "#ff1493"
       }
+    },
+    "ios": {
+      "bundleIdentifier": "org.brainkandi.app"
     }
   }
 }

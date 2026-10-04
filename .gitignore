@@ -5,6 +5,7 @@
 /.android-sdk/
 /.gradle/
 /.ccache/
+/.xcode-derived-data/
 /android/
+/ios/
 /linux/
-
