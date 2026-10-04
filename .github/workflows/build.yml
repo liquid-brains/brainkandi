@@ -35,19 +35,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/checkout@v4
-        with:
-          repository: liquid-brains/brainlight
-          ref: 9c45c5ab3a8699b0626a4b913c6bbc0a4d4cdd37
-          path: brainlight
-
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
-          cache-dependency-path: |
-            package-lock.json
-            brainlight/package-lock.json
 
       - uses: actions/setup-java@v4
         if: matrix.platform == 'Android'
@@ -55,12 +46,16 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - uses: android-actions/setup-android@v3
+      - name: Install Android SDK components
         if: matrix.platform == 'Android'
-
-      - name: Install Android NDK
-        if: matrix.platform == 'Android'
-        run: sdkmanager "ndk;27.1.12297006" "cmake;3.22.1"
+        run: |
+          yes | sdkmanager --licenses
+          sdkmanager \
+            "platform-tools" \
+            "platforms;android-36" \
+            "build-tools;36.0.0" \
+            "ndk;27.1.12297006" \
+            "cmake;3.22.1"
 
       - name: Restore build caches
         uses: actions/cache@v4
@@ -71,18 +66,11 @@ jobs:
             .ccache
             .xcode-derived-data
             ios
-            brainlight/node_modules
-            brainlight/dist
             ~/.cache/electron
             ~/Library/Caches/CocoaPods
           key: ${{ runner.os }}-${{ matrix.platform }}-build-${{ hashFiles('package-lock.json', 'app.json', 'plugins/**') }}
           restore-keys: |
             ${{ runner.os }}-${{ matrix.platform }}-build-
-
-      - name: Prepare brainlight dependency
-        run: |
-          ln -s "$PWD/brainlight" ../brainlight
-          make -C ../brainlight do-npm-pack
 
       - name: Build
         env:
