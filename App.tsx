@@ -321,6 +321,7 @@ export default function App(): React.JSX.Element {
 	const [status, setStatus] = useState('Ready.');
 	const [isRunning, setIsRunning] = useState(false);
 	const didStopCurrentSession = useRef(false);
+	const activeJourneyID = useRef<string | undefined>(undefined);
 	const sessionNotificationID = useRef<string | undefined>(undefined);
 	const sessionNotificationVersion = useRef(0);
 	const [editingProfileID, setEditingProfileID] = useState<ProfileID | undefined>();
@@ -404,6 +405,7 @@ export default function App(): React.JSX.Element {
 			outcome: 'running',
 			files: initialJourneyFiles(profile)
 		};
+		activeJourneyID.current = journey.id;
 		setIsRunning(true);
 		didStopCurrentSession.current = false;
 		setStatus('Session running. Keeping this device awake.');
@@ -421,10 +423,14 @@ export default function App(): React.JSX.Element {
 			setStatus(errorMessage(error));
 		} finally {
 			journey.endedAt = new Date().toISOString();
-			await journeyStore.save(journey);
-			await loadJourneys();
-			deactivateKeepAwake(keepAwakeTag);
-			setIsRunning(false);
+			try {
+				await journeyStore.save(journey);
+				await loadJourneys();
+			} finally {
+				deactivateKeepAwake(keepAwakeTag);
+				activeJourneyID.current = undefined;
+				setIsRunning(false);
+			}
 		}
 	}, [isRunning, loadJourneys]);
 
@@ -713,7 +719,7 @@ export default function App(): React.JSX.Element {
 					<JourneyRatingButton thumb="👎" count={journey.rating !== undefined && journey.rating < 0 ? Math.abs(journey.rating) : 1} color={journey.rating !== undefined && journey.rating < 0 ? '#c62828' : '#666'} disabled={journey.outcome === 'running'} onPress={function (): void { void rateJourney(journey, -1); }} />
 					<Button title="Journal entry" disabled={journey.outcome === 'running'} onPress={function (): void { openJournalEntry(journey); }} />
 					<Button title="View parameters" disabled={journey.outcome === 'running'} onPress={function (): void { setParametersJourney(journey); }} />
-					<Button title="Delete" color="#75113d" disabled={journey.outcome === 'running'} onPress={function (): void { void deleteJourney(journey); }} />
+					<Button title="Delete" color="#75113d" disabled={journey.id === activeJourneyID.current} onPress={function (): void { void deleteJourney(journey); }} />
 				</View>
 			</View>
 		);
@@ -1068,7 +1074,9 @@ function JourneyParametersModal(props: {
 			<SafeAreaView style={styles.documentModal}>
 				<Text style={styles.documentModalTitle}>Journey parameters</Text>
 				<Text style={styles.help}>These are the exact profile settings and device files saved when this journey began.</Text>
-				<TextInput editable={false} multiline value={serializedProfile} style={styles.documentInput} textAlignVertical="top" />
+				<ScrollView contentContainerStyle={styles.parametersViewer} keyboardShouldPersistTaps="handled">
+					<Text selectable style={styles.parametersText}>{serializedProfile}</Text>
+				</ScrollView>
 				<Button title="Close" onPress={props.onClose} />
 			</SafeAreaView>
 		</Modal>
@@ -1104,6 +1112,10 @@ async function updateSessionNotification(isRunning: boolean, status: string, not
 		}
 		notificationID.current = undefined;
 	}
+	await dismissPresentedSessionNotifications();
+	if (notificationVersion.current !== updateVersion) {
+		return;
+	}
 	if (!isRunning) {
 		return;
 	}
@@ -1128,6 +1140,15 @@ async function updateSessionNotification(isRunning: boolean, status: string, not
 		return;
 	}
 	notificationID.current = scheduledNotificationID;
+}
+
+async function dismissPresentedSessionNotifications(): Promise<void> {
+	const notifications = await Notifications.getPresentedNotificationsAsync();
+	await Promise.all(notifications.filter(function (notification): boolean {
+		return(notification.request.content.categoryIdentifier === sessionNotificationCategoryID);
+	}).map(async function (notification): Promise<void> {
+		await Notifications.dismissNotificationAsync(notification.request.identifier);
+	}));
 }
 
 function parseFileData(serialized: string): Record<string, unknown> {
@@ -1191,6 +1212,8 @@ const styles = StyleSheet.create({
 	documentModal: { backgroundColor: '#ff1493', flex: 1, gap: 16, padding: 20 },
 	documentModalTitle: { color: '#fff', fontSize: 26, fontWeight: '800' },
 	documentInput: { backgroundColor: '#fff', borderColor: '#bd2b72', borderRadius: 8, borderWidth: 1, color: '#280016', flex: 1, fontFamily: 'monospace', padding: 12, textAlignVertical: 'top' },
+	parametersViewer: { backgroundColor: '#fff', borderColor: '#bd2b72', borderRadius: 8, borderWidth: 1, flexGrow: 1, padding: 12 },
+	parametersText: { color: '#280016', fontFamily: 'monospace' },
 	editorForm: { gap: 10, paddingBottom: 8 },
 	profileTypeChoices: { gap: 10 },
 	frequencyRange: { borderColor: '#bd2b72', borderRadius: 8, borderWidth: 1, gap: 8, padding: 10 }

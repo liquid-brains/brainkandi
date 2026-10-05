@@ -16,7 +16,7 @@ export interface SessionDeviceFactory {
 
 export class VielightDeviceFactory implements SessionDeviceFactory {
 	public connect(deviceAddress: string): SessionDevice {
-		return(new VielightDevice({ ip: deviceAddress }));
+		return(new VielightDevice({ ip: deviceAddress, logger: console }));
 	}
 }
 

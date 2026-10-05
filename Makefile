@@ -51,6 +51,9 @@ android-users: android-shell.nix
 android-crash-log: android-shell.nix
 	NIXPKGS_ACCEPT_ANDROID_SDK_LICENSE=1 nix-shell android-shell.nix --run 'adb shell am force-stop --user 0 org.brainkandi.app && adb logcat -c && adb shell am start --user 0 -n org.brainkandi.app/.MainActivity >/dev/null && sleep 3 && adb logcat -d -v brief "*:E"'
 
+android-app-log: android-shell.nix
+	NIXPKGS_ACCEPT_ANDROID_SDK_LICENSE=1 nix-shell android-shell.nix --run 'pid="$$(adb shell pidof org.brainkandi.app | tr -d "\r")"; test -n "$$pid" && adb logcat -d -v brief --pid="$$pid"'
+
 android-install: android-shell.nix
 	NIXPKGS_ACCEPT_ANDROID_SDK_LICENSE=1 nix-shell android-shell.nix --run 'adb install --user 0 -r android/app/build/outputs/apk/release/app-release.apk'
 
@@ -60,4 +63,4 @@ clean:
 distclean: clean
 	rm -rf node_modules .expo .android-sdk .gradle .ccache
 
-.PHONY: all clean distclean typecheck test check bundle-android bundle-linux run-linux apk ipa android-devices android-users android-crash-log android-install
+.PHONY: all clean distclean typecheck test check bundle-android bundle-linux run-linux apk ipa android-devices android-users android-crash-log android-app-log android-install
