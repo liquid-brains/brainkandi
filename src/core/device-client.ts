@@ -22,16 +22,19 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 export function fixedRandomSessionStatus(parameters: RandomSessionParameters, data: Record<string, unknown>): string {
 	const modules = Array.isArray(data.modules) ? data.modules.filter(isRecord) : [];
+	const isInactive = function (module: Record<string, unknown>): boolean {
+		return(module.power === 0 && module.freq === 0);
+	};
 	const details: string[] = [];
 	if (parameters.frequency.perChannel !== true) {
 		const activeModule = modules.find(function (module): boolean {
-			return(module.active === true && typeof module.freq === 'number');
+			return(!isInactive(module) && typeof module.freq === 'number');
 		});
 		details.push(activeModule === undefined ? 'Frequency: off' : `Frequency: ${activeModule.freq} Hz`);
 	}
 	if (parameters.power.perChannel === false) {
 		const moduleWithPower = modules.find(function (module): boolean {
-			return(typeof module.power === 'number');
+			return(!isInactive(module) && typeof module.power === 'number');
 		});
 		if (moduleWithPower !== undefined) {
 			details.push(`Power: ${moduleWithPower.power}`);

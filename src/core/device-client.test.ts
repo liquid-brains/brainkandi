@@ -12,7 +12,7 @@ afterEach(function (): void {
 
 describe('random session execution with Off %', function () {
 	it('reports only values fixed for the current session minute', function () {
-		const data = { modules: [{ active: false, freq: null, power: 42 }, { active: true, freq: 18, power: 42 }] };
+		const data = { modules: [{ active: true, freq: 0, power: 0 }, { active: true, freq: 18, power: 42 }] };
 
 		expect(fixedRandomSessionStatus({ duration: 5, frequency: { ranges: [{ min: 10 }], perChannel: false }, power: { min: 1, perChannel: false } }, data)).toBe('Frequency: 18 Hz; Power: 42');
 		expect(fixedRandomSessionStatus({ duration: 5, frequency: { ranges: [{ min: 10 }], perChannel: true }, power: { min: 1, perChannel: true } }, data)).toBe('');
@@ -42,7 +42,7 @@ describe('random session execution with Off %', function () {
 	});
 
 	it.each([
-		{ random: 0.1, frequency: null },
+		{ random: 0.1, frequency: 0 },
 		{ random: 0.25, frequency: 15 },
 		{ random: 0.8, frequency: 40 }
 	])('generates automatic range selection and Off %% at random value $random', function ({ random, frequency }) {
@@ -60,7 +60,8 @@ describe('random session execution with Off %', function () {
 		expect(file.modules).toHaveLength(12);
 		for (const module of file.modules) {
 			expect(module.freq).toBe(frequency);
-			expect(module.active).toBe(frequency !== null);
+			expect(module.active).toBe(true);
+			expect(module.power).toBe(frequency === 0 ? 0 : 1);
 			expect(module.moduleControl.phase).toBe(0);
 		}
 	});
@@ -75,8 +76,9 @@ describe('random session execution with Off %', function () {
 		});
 
 		for (const module of file.modules) {
-			expect(module.active).toBe(false);
-			expect(module.freq).toBeNull();
+			expect(module.active).toBe(true);
+			expect(module.freq).toBe(0);
+			expect(module.power).toBe(0);
 			expect(module.moduleControl.phase).toBe(1);
 		}
 	});
@@ -96,7 +98,7 @@ describe('random session execution with Off %', function () {
 		});
 
 		expect(file.modules[0]).toMatchObject({ active: true, freq: 10 });
-		expect(file.modules[1]).toMatchObject({ active: false, freq: null });
+		expect(file.modules[1]).toMatchObject({ active: true, freq: 0, power: 0 });
 		expect(file.modules.slice(2).every(function (module): boolean { return(module.active && module.freq === 10); })).toBe(true);
 	});
 
@@ -139,7 +141,7 @@ describe('random session execution with Off %', function () {
 		for (let index = 0; index < 1000; index++) {
 			const file = VielightDevice.generateRandomParams('probability.vnp0', parameters);
 			for (const module of file.modules) {
-				if (!module.active) {
+				if (module.power === 0 && module.freq === 0) {
 					offCount++;
 				} else {
 					activeCount++;
