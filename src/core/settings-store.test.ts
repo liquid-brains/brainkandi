@@ -24,11 +24,11 @@ beforeEach(function (): void {
 
 describe('app settings', function () {
 	it('defaults system colors off without existing storage', async function () {
-		expect(await new AsyncStorageSettingsStore().load()).toEqual({ useSystemColors: false });
+		expect(await new AsyncStorageSettingsStore().load()).toEqual({ useSystemColors: false, useLiquidGlassButtons: false });
 	});
 
 	it.each([false, true])('round-trips useSystemColors %s', async function (useSystemColors) {
-		const settings = { useSystemColors: useSystemColors };
+		const settings = { useSystemColors: useSystemColors, useLiquidGlassButtons: false };
 		expect(decapsulateSettings(encapsulateSettings(settings))).toEqual(settings);
 		await new AsyncStorageSettingsStore().save(settings);
 		expect(await new AsyncStorageSettingsStore().load()).toEqual(settings);
@@ -36,18 +36,27 @@ describe('app settings', function () {
 
 	it('persists toggling system colors back off', async function () {
 		const store = new AsyncStorageSettingsStore();
-		await store.save({ useSystemColors: true });
-		await store.save({ useSystemColors: false });
-		expect(await new AsyncStorageSettingsStore().load()).toEqual({ useSystemColors: false });
+		await store.save({ useSystemColors: true, useLiquidGlassButtons: false });
+		await store.save({ useSystemColors: false, useLiquidGlassButtons: false });
+		expect(await new AsyncStorageSettingsStore().load()).toEqual({ useSystemColors: false, useLiquidGlassButtons: false });
 	});
 
-	it.each(['bad JSON', 'null', '[]', '{"version":2,"useSystemColors":true}', '{"version":1}', '{"version":1,"useSystemColors":"false"}'])('reports malformed settings: %s', function (serialized) {
+	it.each([false, true])('round-trips useLiquidGlassButtons %s', async function (useLiquidGlassButtons) {
+		const settings = { useSystemColors: false, useLiquidGlassButtons: useLiquidGlassButtons };
+		expect(decapsulateSettings(encapsulateSettings(settings))).toEqual(settings);
+	});
+
+	it('defaults liquid glass buttons off for saved settings without the option', function () {
+		expect(decapsulateSettings('{"version":1,"useSystemColors":false}')).toEqual({ useSystemColors: false, useLiquidGlassButtons: false });
+	});
+
+	it.each(['bad JSON', 'null', '[]', '{"version":2,"useSystemColors":true}', '{"version":1}', '{"version":1,"useSystemColors":"false"}', '{"version":1,"useSystemColors":false,"useLiquidGlassButtons":"true"}'])('reports malformed settings: %s', function (serialized) {
 		expect(function (): void { decapsulateSettings(serialized); }).toThrow();
 	});
 
 	it('surfaces storage failures without claiming the setting was saved', async function () {
 		setItem.mockRejectedValueOnce(new Error('Storage unavailable.'));
-		await expect(new AsyncStorageSettingsStore().save({ useSystemColors: true })).rejects.toThrow('Storage unavailable.');
-		expect(await new AsyncStorageSettingsStore().load()).toEqual({ useSystemColors: false });
+		await expect(new AsyncStorageSettingsStore().save({ useSystemColors: true, useLiquidGlassButtons: false })).rejects.toThrow('Storage unavailable.');
+		expect(await new AsyncStorageSettingsStore().load()).toEqual({ useSystemColors: false, useLiquidGlassButtons: false });
 	});
 });

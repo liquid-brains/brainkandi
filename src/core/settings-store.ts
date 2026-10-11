@@ -2,16 +2,20 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export type AppSettings = {
 	useSystemColors: boolean;
+	useLiquidGlassButtons: boolean;
 };
 
-export const defaultSettings: AppSettings = { useSystemColors: false };
+export const defaultSettings: AppSettings = { useSystemColors: false, useLiquidGlassButtons: false };
 const settingsStorageKey = 'brainkandi.settings.v1';
 
 export function encapsulateSettings(settings: AppSettings): string {
 	if (typeof settings.useSystemColors !== 'boolean') {
 		throw(new Error('Use system colors must be a boolean.'));
 	}
-	return(JSON.stringify({ version: 1, useSystemColors: settings.useSystemColors }));
+	if (typeof settings.useLiquidGlassButtons !== 'boolean') {
+		throw(new Error('Use liquid glass buttons must be a boolean.'));
+	}
+	return(JSON.stringify({ version: 1, useSystemColors: settings.useSystemColors, useLiquidGlassButtons: settings.useLiquidGlassButtons }));
 }
 
 export function decapsulateSettings(serialized: string): AppSettings {
@@ -24,7 +28,13 @@ export function decapsulateSettings(serialized: string): AppSettings {
 	if (typeof value !== 'object' || value === null || !('version' in value) || value.version !== 1 || !('useSystemColors' in value) || typeof value.useSystemColors !== 'boolean') {
 		throw(new Error('Saved settings have an unsupported format.'));
 	}
-	return({ useSystemColors: value.useSystemColors });
+	if (!('useLiquidGlassButtons' in value)) {
+		return({ useSystemColors: value.useSystemColors, useLiquidGlassButtons: false });
+	}
+	if (typeof value.useLiquidGlassButtons !== 'boolean') {
+		throw(new Error('Saved liquid glass button setting is invalid.'));
+	}
+	return({ useSystemColors: value.useSystemColors, useLiquidGlassButtons: value.useLiquidGlassButtons });
 }
 
 export class AsyncStorageSettingsStore {

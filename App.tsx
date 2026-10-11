@@ -1,6 +1,8 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { createContext, createElement, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import {
 	Button as NativeButton,
+	type ButtonProps,
+	type ViewStyle,
 	Image,
 	KeyboardAvoidingView,
 	Modal,
@@ -47,12 +49,69 @@ const profileStore = new AsyncStorageProfileStore();
 const deviceStore = new AsyncStorageDeviceStore();
 const journeyStore = new AsyncStorageJourneyStore();
 const settingsStore = new AsyncStorageSettingsStore();
-const ThemeContext = createContext({ colors: brandColors, styles: createStyles(brandColors) });
+const ThemeContext = createContext({ colors: brandColors, styles: createStyles(brandColors), useLiquidGlassButtons: false });
 const sessionRunner = new SessionRunner(new VielightDeviceFactory());
 const keepAwakeTag = 'brainkandi-session';
 const addDevicePickerValue = '__add_new_device__';
 const sessionNotificationCategoryID = 'brainkandi-session';
 const stopSessionNotificationActionID = 'stop-session';
+const liquidGlassFilterID = 'brainkandi-liquid-glass';
+
+const webLiquidGlassStyle: ViewStyle = Platform.OS === 'web' ? {
+	backdropFilter: `url("#${liquidGlassFilterID}") blur(10px) saturate(1.45)`
+} as unknown as ViewStyle : {};
+
+function translucent(color: string, opacity: number): string {
+	if (/^#[\da-f]{6}$/i.test(color)) {
+		const red = Number.parseInt(color.slice(1, 3), 16);
+		const green = Number.parseInt(color.slice(3, 5), 16);
+		const blue = Number.parseInt(color.slice(5, 7), 16);
+		return(`rgba(${red}, ${green}, ${blue}, ${opacity})`);
+	}
+	return(color);
+}
+
+function LiquidGlassFilters(): React.ReactNode {
+	if (Platform.OS !== 'web') {
+		return(null);
+	}
+	return(createElement('svg', {
+		'aria-hidden': true,
+		focusable: false,
+		height: 0,
+		style: { height: 0, position: 'absolute', width: 0 },
+		width: 0
+	},
+	createElement('defs', undefined,
+		createElement('filter', {
+			colorInterpolationFilters: 'sRGB',
+			height: '140%',
+			id: liquidGlassFilterID,
+			width: '140%',
+			x: '-20%',
+			y: '-20%'
+		},
+		createElement('feTurbulence', {
+			baseFrequency: '0.018 0.024',
+			numOctaves: '1',
+			result: 'surface',
+			seed: '19',
+			type: 'fractalNoise'
+		}),
+		createElement('feDisplacementMap', {
+			in: 'SourceGraphic',
+			in2: 'surface',
+			result: 'refracted',
+			scale: '9',
+			xChannelSelector: 'R',
+			yChannelSelector: 'G'
+		}),
+		createElement('feGaussianBlur', {
+			in: 'refracted',
+			stdDeviation: '0.18'
+		})
+	))));
+}
 
 Notifications.setNotificationHandler({
 	handleNotification: async function () {
@@ -177,9 +236,19 @@ function JourneyRatingButton(props: {
 	disabled: boolean;
 	onPress: () => void;
 }): React.JSX.Element {
-	const { styles } = useContext(ThemeContext);
+	const { styles, useLiquidGlassButtons } = useContext(ThemeContext);
 	return(
-		<Pressable accessibilityRole="button" disabled={props.disabled} onPress={props.onPress} style={[styles.ratingButton, { backgroundColor: props.color }, props.disabled ? styles.ratingButtonDisabled : undefined]}>
+		<Pressable accessibilityRole="button" disabled={props.disabled} onPress={props.onPress} style={function ({ pressed }) {
+			if (!useLiquidGlassButtons) {
+				return([styles.ratingButtonNormal, { backgroundColor: props.color }, props.disabled ? styles.ratingButtonDisabled : undefined]);
+			}
+			return([styles.ratingButton, webLiquidGlassStyle, {
+				backgroundColor: translucent(props.color, pressed ? 0.96 : 0.86),
+				borderColor: translucent(props.color, 0.8),
+				shadowColor: props.color
+			}, props.disabled ? styles.ratingButtonDisabled : undefined]);
+		}}>
+			{useLiquidGlassButtons && <View pointerEvents="none" style={styles.glassHighlight} />}
 			<Text style={styles.ratingThumbs}>{journeyThumbs(props.thumb, props.count)}</Text>
 		</Pressable>
 	);
@@ -227,8 +296,8 @@ export default function App(): React.JSX.Element {
 	const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 	const theme = useMemo(function () {
 		const colors = getAppColors(settings.useSystemColors, colorScheme);
-		return({ colors: colors, styles: createStyles(colors) });
-	}, [settings.useSystemColors, colorScheme]);
+		return({ colors: colors, styles: createStyles(colors), useLiquidGlassButtons: settings.useLiquidGlassButtons });
+	}, [settings.useSystemColors, settings.useLiquidGlassButtons, colorScheme]);
 	const { styles, colors } = theme;
 	const [deviceAddress, setDeviceAddress] = useState('np1.local');
 	const [savedDevices, setSavedDevices] = useState<SavedDevice[]>([]);
@@ -275,6 +344,22 @@ export default function App(): React.JSX.Element {
 		setIsSavingSettings(true);
 		try {
 			const updatedSettings = { ...settings, useSystemColors: useSystemColors };
+			await settingsStore.save(updatedSettings);
+			setSettings(updatedSettings);
+		} catch (error) {
+			setStatus(errorMessage(error));
+		} finally {
+			setIsSavingSettings(false);
+		}
+	}
+
+	async function changeUseLiquidGlassButtons(useLiquidGlassButtons: boolean): Promise<void> {
+		if (isLoadingSettings || isSavingSettings) {
+			return;
+		}
+		setIsSavingSettings(true);
+		try {
+			const updatedSettings = { ...settings, useLiquidGlassButtons: useLiquidGlassButtons };
 			await settingsStore.save(updatedSettings);
 			setSettings(updatedSettings);
 		} catch (error) {
@@ -773,6 +858,7 @@ export default function App(): React.JSX.Element {
 	return(
 		<SafeAreaProvider>
 			<ThemeContext.Provider value={theme}>
+			<LiquidGlassFilters />
 			<SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
 				<StatusBar style={statusBarStyle} />
 				<View style={styles.appHeader}>
@@ -825,6 +911,11 @@ export default function App(): React.JSX.Element {
 										<Switch accessibilityLabel="Use system colors" value={settings.useSystemColors} disabled={isLoadingSettings || isSavingSettings} onValueChange={function (value): void { void changeUseSystemColors(value); }} />
 									</View>
 									<Text style={styles.help}>Follow the system light or dark appearance instead of Brain Kandi colors.</Text>
+									<View style={styles.settingRow}>
+										<Text style={styles.label}>Use liquid glass buttons</Text>
+										<Switch accessibilityLabel="Use liquid glass buttons" value={settings.useLiquidGlassButtons} disabled={isLoadingSettings || isSavingSettings} onValueChange={function (value): void { void changeUseLiquidGlassButtons(value); }} />
+									</View>
+									<Text style={styles.help}>Use the rounded glass button style instead of standard platform buttons.</Text>
 								</Section>
 								<Section title="Devices">
 									<Text style={styles.label}>IP address of Neuro Pro 2</Text>
@@ -893,15 +984,33 @@ export default function App(): React.JSX.Element {
 	);
 }
 
-function Button(props: React.ComponentProps<typeof NativeButton>): React.JSX.Element {
-	const { colors } = useContext(ThemeContext);
-	let color = props.color;
+function Button({ title, color: requestedColor, disabled = false, onPress, ...props }: ButtonProps): React.JSX.Element {
+	const { colors, styles, useLiquidGlassButtons } = useContext(ThemeContext);
+	let color = typeof requestedColor === 'string' ? requestedColor : colors.button;
 	if (color === '#75113d') {
 		color = colors.destructive;
-	} else if (color === undefined && colors !== brandColors) {
-		color = colors.button;
 	}
-	return(<NativeButton {...props} color={color} />);
+	if (!useLiquidGlassButtons) {
+		return(<NativeButton {...props} color={color} disabled={disabled} onPress={onPress} title={title} />);
+	}
+	return(
+		<Pressable
+			{...props}
+			accessibilityRole="button"
+			disabled={disabled}
+			onPress={onPress}
+			style={function ({ pressed }) {
+				return([styles.glassButton, webLiquidGlassStyle, {
+					backgroundColor: translucent(color, pressed ? 0.96 : 0.86),
+					borderColor: translucent(color, 0.78),
+					shadowColor: color
+				}, disabled ? styles.glassButtonDisabled : undefined]);
+			}}
+		>
+			<View pointerEvents="none" style={styles.glassHighlight} />
+			<Text style={styles.glassButtonText}>{title}</Text>
+		</Pressable>
+	);
 }
 
 function Section({ title, children }: { title: string; children: React.ReactNode }): React.JSX.Element {
@@ -923,14 +1032,14 @@ function Field(props: {
 	helpText?: string;
 	error?: string | undefined;
 }): React.JSX.Element {
-	const { styles } = useContext(ThemeContext);
+	const { styles, useLiquidGlassButtons } = useContext(ThemeContext);
 	const [isShowingHelp, setIsShowingHelp] = useState(false);
 
 	return(
 		<View style={styles.field}>
 			<View style={styles.labelRow}>
 				<Text style={styles.label}>{props.label}</Text>
-				{renderFieldHelp(props.label, props.helpText, isShowingHelp, setIsShowingHelp, styles)}
+				{renderFieldHelp(props.label, props.helpText, isShowingHelp, setIsShowingHelp, styles, useLiquidGlassButtons)}
 			</View>
 			<TextInput
 				value={props.value}
@@ -946,7 +1055,7 @@ function Field(props: {
 	);
 }
 
-function renderFieldHelp(label: string, helpText: string | undefined, isShowingHelp: boolean, setIsShowingHelp: (visible: boolean) => void, styles: ReturnType<typeof createStyles>): React.ReactNode {
+function renderFieldHelp(label: string, helpText: string | undefined, isShowingHelp: boolean, setIsShowingHelp: (visible: boolean) => void, styles: ReturnType<typeof createStyles>, useLiquidGlassButtons: boolean): React.ReactNode {
 	if (helpText === undefined) {
 		return(null);
 	}
@@ -956,8 +1065,9 @@ function renderFieldHelp(label: string, helpText: string | undefined, isShowingH
 				accessibilityLabel={`Information about ${label}`}
 				accessibilityRole="button"
 				onPress={function (): void { setIsShowingHelp(true); }}
-				style={styles.informationButton}
+				style={useLiquidGlassButtons ? [styles.informationButton, webLiquidGlassStyle] : styles.informationButtonNormal}
 			>
+				{useLiquidGlassButtons && <View pointerEvents="none" style={styles.glassHighlight} />}
 				<Text style={styles.informationButtonText}>i</Text>
 			</Pressable>
 			<Modal animationType="fade" transparent visible={isShowingHelp} onRequestClose={function (): void { setIsShowingHelp(false); }}>
@@ -1360,7 +1470,7 @@ function createStyles(colors: AppColors) {
 	safeArea: { flex: 1, backgroundColor: colors.background },
 	appHeader: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 20, paddingVertical: 8 },
 	headerTitle: { color: colors.onBackground, fontSize: 20, fontWeight: '700' },
-	menuButton: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center', gap: 5 },
+	menuButton: { alignItems: 'center', gap: 5, height: 44, justifyContent: 'center', width: 44 },
 	menuLine: { width: 24, height: 3, backgroundColor: colors.onBackground, borderRadius: 2 },
 	settingsHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
 	settingRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 16 },
@@ -1392,7 +1502,39 @@ function createStyles(colors: AppColors) {
 	profileDescription: { color: colors.text },
 	journalEntry: { color: colors.text, fontStyle: 'italic', lineHeight: 20, marginTop: 4 },
 	profileButtons: { gap: 5 },
-	ratingButton: { alignItems: 'center', borderRadius: 4, minHeight: 32, justifyContent: 'center', paddingHorizontal: 6 },
+	glassButton: {
+		alignItems: 'center',
+		borderRadius: 18,
+		borderWidth: 1,
+		elevation: 3,
+		justifyContent: 'center',
+		minHeight: 42,
+		overflow: 'hidden',
+		paddingHorizontal: 16,
+		paddingVertical: 9,
+		position: 'relative',
+		shadowOffset: { width: 0, height: 2 },
+		shadowOpacity: 0.22,
+		shadowRadius: 6
+	},
+	glassButtonDisabled: { opacity: 0.42 },
+	glassButtonText: { color: '#fff', fontSize: 15, fontWeight: '700', textAlign: 'center' },
+	glassHighlight: { backgroundColor: 'rgba(255, 255, 255, 0.32)', borderRadius: 18, height: '42%', left: 3, position: 'absolute', right: 3, top: 2 },
+	ratingButtonNormal: { alignItems: 'center', borderRadius: 4, justifyContent: 'center', minHeight: 32, paddingHorizontal: 6 },
+	ratingButton: {
+		alignItems: 'center',
+		borderRadius: 16,
+		borderWidth: 1,
+		elevation: 2,
+		justifyContent: 'center',
+		minHeight: 34,
+		overflow: 'hidden',
+		paddingHorizontal: 8,
+		position: 'relative',
+		shadowOffset: { width: 0, height: 1 },
+		shadowOpacity: 0.2,
+		shadowRadius: 4
+	},
 	ratingButtonDisabled: { opacity: 0.4 },
 	ratingThumbs: { color: '#fff', fontSize: 20, letterSpacing: -10 },
 	addDevice: { gap: 10 },
@@ -1401,7 +1543,8 @@ function createStyles(colors: AppColors) {
 	helpDialog: { backgroundColor: colors.helpSurface, borderRadius: 14, gap: 16, maxWidth: 480, padding: 22, width: '100%' },
 	helpTitle: { color: colors.title, fontSize: 22, fontWeight: '700' },
 	helpDialogText: { color: colors.text, fontSize: 16, lineHeight: 23 },
-	informationButton: { alignItems: 'center', alignSelf: 'flex-start', backgroundColor: colors.accent, borderRadius: 13, height: 26, justifyContent: 'center', width: 26 },
+	informationButton: { alignItems: 'center', alignSelf: 'flex-start', backgroundColor: translucent(colors.accent, 0.86), borderColor: translucent(colors.accent, 0.8), borderRadius: 13, borderWidth: 1, elevation: 2, height: 26, justifyContent: 'center', overflow: 'hidden', position: 'relative', shadowColor: colors.accent, shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.2, shadowRadius: 3, width: 26 },
+	informationButtonNormal: { alignItems: 'center', alignSelf: 'flex-start', backgroundColor: colors.accent, borderRadius: 13, height: 26, justifyContent: 'center', width: 26 },
 	informationButtonText: { color: '#fff', fontSize: 17, fontWeight: '800' },
 	documentModal: { backgroundColor: colors.background, flex: 1, gap: 16, padding: 20 },
 	documentModalTitle: { color: colors.onBackground, fontSize: 26, fontWeight: '800' },
