@@ -14,7 +14,8 @@
     },
     "plugins": [
       "expo-notifications",
-      "./plugins/with-android-cleartext.js"
+      "./plugins/with-android-cleartext.js",
+      "expo-sharing"
     ],
     "android": {
       "package": "org.brainkandi.app",

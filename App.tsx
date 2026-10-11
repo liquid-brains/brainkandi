@@ -9,7 +9,6 @@ import {
 	Platform,
 	Pressable,
 	ScrollView,
-	Share,
 	StyleSheet,
 	Switch,
 	Text,
@@ -21,8 +20,10 @@ import { Picker } from '@react-native-picker/picker';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import { StatusBar } from 'expo-status-bar';
-import * as Clipboard from 'expo-clipboard';
+import * as DocumentPicker from 'expo-document-picker';
+import * as FileSystem from 'expo-file-system/legacy';
 import * as Notifications from 'expo-notifications';
+import * as Sharing from 'expo-sharing';
 import * as SystemUI from 'expo-system-ui';
 
 import { SessionRunner, VielightDeviceFactory } from './src/core/device-client';
@@ -69,6 +70,21 @@ function translucent(color: string, opacity: number): string {
 		return(`rgba(${red}, ${green}, ${blue}, ${opacity})`);
 	}
 	return(color);
+}
+
+function profileFileName(name: string): string {
+	const baseName = name.trim().replace(/[^a-z0-9_-]+/gi, '-').replace(/^-+|-+$/g, '');
+	return(`${baseName === '' ? 'brainkandi-profile' : baseName}.brainkandi.json`);
+}
+
+function downloadProfileFile(fileName: string, contents: string): void {
+	const file = new Blob([contents], { type: 'application/json' });
+	const url = URL.createObjectURL(file);
+	const link = document.createElement('a');
+	link.href = url;
+	link.download = fileName;
+	link.click();
+	URL.revokeObjectURL(url);
 }
 
 function LiquidGlassFilters(): React.ReactNode {
@@ -343,8 +359,6 @@ export default function App(): React.JSX.Element {
 	const [editingProfileID, setEditingProfileID] = useState<ProfileID | undefined>();
 	const [profileEditor, setProfileEditor] = useState<ProfileEditorValues | undefined>();
 	const [isCreatingProfile, setIsCreatingProfile] = useState(false);
-	const [isImportingProfile, setIsImportingProfile] = useState(false);
-	const [sharedProfileJSON, setSharedProfileJSON] = useState('');
 	const [journalEntryJourney, setJournalEntryJourney] = useState<Journey | undefined>();
 	const [journalEntryText, setJournalEntryText] = useState('');
 	const [parametersJourney, setParametersJourney] = useState<Journey | undefined>();
@@ -630,12 +644,6 @@ export default function App(): React.JSX.Element {
 		});
 	}
 
-	function openProfileImport(): void {
-		setEditingProfileID(undefined);
-		setSharedProfileJSON('');
-		setIsImportingProfile(true);
-	}
-
 	function openProfileCreation(): void {
 		setEditingProfileID(undefined);
 		setProfileEditor(undefined);
@@ -674,8 +682,6 @@ export default function App(): React.JSX.Element {
 		setEditingProfileID(undefined);
 		setProfileEditor(undefined);
 		setIsCreatingProfile(false);
-		setIsImportingProfile(false);
-		setSharedProfileJSON('');
 	}
 
 	async function saveNewProfile(): Promise<void> {
@@ -719,27 +725,58 @@ export default function App(): React.JSX.Element {
 		});
 	}
 
-	async function importSharedProfile(): Promise<void> {
+	async function importProfileFile(): Promise<void> {
 		try {
-			const imported = await profileStore.importSharedProfile(sharedProfileJSON);
+			const result = await DocumentPicker.getDocumentAsync({
+				type: ['application/json', 'text/json'],
+				copyToCacheDirectory: true,
+				base64: Platform.OS === 'web'
+			});
+			if (result.canceled) {
+				return;
+			}
+			const asset = result.assets[0];
+			if (asset === undefined) {
+				throw(new Error('No profile file was selected.'));
+			}
+			let serializedProfile: string;
+			if (Platform.OS === 'web') {
+				if (asset.file === undefined) {
+					throw(new Error('Selected profile file cannot be read.'));
+				}
+				serializedProfile = await asset.file.text();
+			} else {
+				serializedProfile = await FileSystem.readAsStringAsync(asset.uri);
+			}
+			const imported = await profileStore.importSharedProfile(serializedProfile);
 			await loadProfiles();
-			closeProfileDocumentModal();
 			setStatus(`Imported ${imported.profile.name}.`);
 		} catch (error) {
 			setStatus(errorMessage(error));
 		}
 	}
 
-	async function shareProfile(profile: StoredProfile): Promise<void> {
+	async function exportProfile(profile: StoredProfile): Promise<void> {
 		try {
 			const serializedProfile = encapsulateSharedProfile(profile.profile, profiles);
 			if (Platform.OS === 'web') {
-				await Clipboard.setStringAsync(serializedProfile);
-				setStatus(`${profile.profile.name} copied to the clipboard.`);
+				downloadProfileFile(profileFileName(profile.profile.name), serializedProfile);
+				setStatus(`${profile.profile.name} downloaded as a profile file.`);
 				return;
 			}
-			await Share.share({ title: profile.profile.name, message: serializedProfile });
-			setStatus(`${profile.profile.name} is ready to share.`);
+			if (FileSystem.cacheDirectory === null) {
+				throw(new Error('The device does not provide a writable profile-file location.'));
+			}
+			const fileURI = `${FileSystem.cacheDirectory}${profileFileName(profile.profile.name)}`;
+			await FileSystem.writeAsStringAsync(fileURI, serializedProfile);
+			if (!await Sharing.isAvailableAsync()) {
+				throw(new Error('Saving profile files is not available on this device.'));
+			}
+			await Sharing.shareAsync(fileURI, {
+				dialogTitle: `Save ${profile.profile.name}`,
+				mimeType: 'application/json'
+			});
+			setStatus(`${profile.profile.name} is ready to save as a profile file.`);
 		} catch (error) {
 			setStatus(errorMessage(error));
 		}
@@ -816,7 +853,7 @@ export default function App(): React.JSX.Element {
 				<View style={styles.profileButtons}>
 					<Button title="Run" disabled={isRunning || item.profile.kind === 'ai' || validationErrors.length > 0 || sequenceError !== undefined} onPress={function (): void { runSavedProfile(item); }} />
 					<Button title="View / edit" disabled={isRunning} onPress={function (): void { openProfileEditor(item); }} />
-					<Button title="Share / copy" disabled={isRunning} onPress={function (): void { void shareProfile(item); }} />
+					<Button title="Export file" disabled={isRunning} onPress={function (): void { void exportProfile(item); }} />
 					<Button title="Delete" color="#75113d" disabled={isRunning} onPress={function (): void { void deleteProfile(item); }} />
 				</View>
 			</View>
@@ -916,7 +953,7 @@ export default function App(): React.JSX.Element {
 						<Section title="Saved profiles">
 							<Text style={styles.help}>Share a profile to send it without a central server.</Text>
 							<Button title="New profile" disabled={isRunning} onPress={openProfileCreation} />
-							<Button title="Import shared profile" disabled={isRunning} onPress={openProfileImport} />
+							<Button title="Import profile file" disabled={isRunning} onPress={function (): void { void importProfileFile(); }} />
 							{profiles.map(function (profile): React.JSX.Element {
 								return(renderProfile(profile));
 							})}
@@ -1016,15 +1053,6 @@ export default function App(): React.JSX.Element {
 					saveTitle="Save changes"
 					profiles={profiles}
 					editingProfileID={editingProfileID}
-				/>
-				<ProfileDocumentModal
-					title="Import shared profile"
-					visible={isImportingProfile}
-					value={sharedProfileJSON}
-					onChangeText={setSharedProfileJSON}
-					onClose={closeProfileDocumentModal}
-					onSave={function (): void { void importSharedProfile(); }}
-					saveTitle="Import profile"
 				/>
 				<JourneyJournalModal
 					journey={journalEntryJourney}
@@ -1388,31 +1416,6 @@ function ProfileEditorModal(props: {
 						{renderEditorFields()}
 					</ScrollView>
 					{props.values === undefined ? null : <Button title={props.saveTitle} onPress={props.onSave} />}
-					<Button title="Cancel" color="#75113d" onPress={props.onClose} />
-				</KeyboardAvoidingView>
-			</SafeAreaView>
-		</Modal>
-	);
-}
-
-function ProfileDocumentModal(props: {
-	title: string;
-	visible: boolean;
-	value: string;
-	onChangeText: (value: string) => void;
-	onClose: () => void;
-	onSave: () => void;
-	saveTitle: string;
-}): React.JSX.Element {
-	const { styles } = useContext(ThemeContext);
-	return(
-		<Modal animationType="slide" visible={props.visible} onRequestClose={props.onClose}>
-			<SafeAreaView style={styles.documentModal}>
-				<KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.keyboardAvoidingModal}>
-					<Text style={styles.documentModalTitle}>{props.title}</Text>
-					<Text style={styles.help}>Paste a shared profile document.</Text>
-					<TextInput multiline value={props.value} onChangeText={props.onChangeText} style={styles.documentInput} autoCapitalize="none" />
-					<Button title={props.saveTitle} onPress={props.onSave} />
 					<Button title="Cancel" color="#75113d" onPress={props.onClose} />
 				</KeyboardAvoidingView>
 			</SafeAreaView>
