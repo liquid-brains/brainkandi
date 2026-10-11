@@ -1,6 +1,7 @@
 import { VielightDevice } from '@liquid-brains/brainlight/lib/neuropro/index.js';
 
 import type { RandomSessionParameters, SessionProfile } from './profiles';
+import { randomParametersFromProfile } from './random-profile-form';
 
 export interface SessionDevice {
 	runFileFromData: VielightDevice['runFileFromData'];
@@ -27,6 +28,9 @@ export class SessionRunner {
 	public constructor(private readonly deviceFactory: SessionDeviceFactory) {}
 
 	public async runProfile(deviceAddress: string, profile: SessionProfile, onStatus?: (status: string) => void, onGeneratedFile?: (fileName: string, data: Record<string, unknown>) => void): Promise<void> {
+		if (profile.kind === 'random') {
+			randomParametersFromProfile(profile);
+		}
 		const device = this.deviceFactory.connect(deviceAddress);
 		this.beginSession(device);
 		try {
@@ -35,7 +39,7 @@ export class SessionRunner {
 					await device.runFileFromData(profile.fileName, profile.fileData, { signal: this.activeSessionSignal() });
 					return;
 				case 'random':
-					await this.runRandom(device, profile.parameters, onStatus, onGeneratedFile);
+					await this.runRandom(device, randomParametersFromProfile(profile), onStatus, onGeneratedFile);
 					return;
 				case 'ai':
 					throw(new Error('This profile type is not supported.'));
@@ -46,6 +50,7 @@ export class SessionRunner {
 	}
 
 	public async runExperiment(deviceAddress: string, parameters: RandomSessionParameters, onStatus?: (status: string) => void): Promise<void> {
+		VielightDevice.validateRandomParams(parameters);
 		const device = this.deviceFactory.connect(deviceAddress);
 		this.beginSession(device);
 		try {

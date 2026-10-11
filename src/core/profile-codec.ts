@@ -1,5 +1,6 @@
 import type { RandomSessionParameters, SessionProfile, StoredProfile } from './profiles';
 import { validateProfile } from './profiles';
+import { isRandomFormValues } from './random-profile-form';
 
 type StoredProfilesDocument = {
 	version: 1;
@@ -19,28 +20,48 @@ function optionalNumber(value: unknown, name: string): number | undefined {
 	if (value === undefined) {
 		return(undefined);
 	}
-	if (typeof value !== 'number') {
+	if (typeof value !== 'number' || !Number.isFinite(value)) {
 		throw(new Error(`Random profile parameter ${name} is invalid.`));
 	}
 	return(value);
 }
 
 function decodeRandomParameters(value: unknown, allowLegacy: boolean): RandomSessionParameters {
-	if (!isRecord(value) || typeof value.duration !== 'number') {
+	if (!isRecord(value) || typeof value.duration !== 'number' || !Number.isFinite(value.duration)) {
 		throw(new Error('Random profile has invalid required parameters.'));
 	}
-	if (isRecord(value.frequency) && isRecord(value.power) && Array.isArray(value.frequency.ranges) && typeof value.power.min === 'number') {
-		const ranges = value.frequency.ranges.map(function (range): RandomSessionParameters['frequency']['ranges'][number] {
-			if (!isRecord(range) || typeof range.min !== 'number') {
+	if (isRecord(value.frequency) && isRecord(value.power) && Array.isArray(value.frequency.ranges) && typeof value.power.min === 'number' && Number.isFinite(value.power.min)) {
+		let offWeight = 0;
+		let totalWeight = 0;
+		let hasOff = false;
+		const ranges: RandomSessionParameters['frequency']['ranges'] = [];
+		for (const range of value.frequency.ranges) {
+			if (!isRecord(range)) {
 				throw(new Error('Random profile frequency range is invalid.'));
 			}
-			const decodedRange: RandomSessionParameters['frequency']['ranges'][number] = { min: range.min };
-			const maximum = optionalNumber(range.max, 'frequency range maximum');
-			if (maximum !== undefined) {
-				decodedRange.max = maximum;
+			const weight = optionalNumber(range.weight, 'frequency weight');
+			totalWeight += weight ?? 100 / value.frequency.ranges.length;
+			if ('off' in range) {
+				if (!allowLegacy || range.off !== true || 'min' in range || 'max' in range) {
+					throw(new Error('Random profile off entry is invalid.'));
+				}
+				hasOff = true;
+				offWeight += weight ?? 100 / value.frequency.ranges.length;
+			} else {
+				if (typeof range.min !== 'number' || !Number.isFinite(range.min)) {
+					throw(new Error('Random profile frequency range is invalid.'));
+				}
+				const decodedRange: RandomSessionParameters['frequency']['ranges'][number] = { min: range.min };
+				const maximum = optionalNumber(range.max, 'frequency range maximum');
+				if (maximum !== undefined) {
+					decodedRange.max = maximum;
+				}
+				if (weight !== undefined) {
+					decodedRange.weight = weight;
+				}
+				ranges.push(decodedRange);
 			}
-			return(decodedRange);
-		});
+		}
 		if (typeof value.frequency.perChannel !== 'undefined' && typeof value.frequency.perChannel !== 'boolean') {
 			throw(new Error('Random profile frequency per-channel setting is invalid.'));
 		}
@@ -52,6 +73,18 @@ function decodeRandomParameters(value: unknown, allowLegacy: boolean): RandomSes
 			frequency: { ranges: ranges },
 			power: { min: value.power.min }
 		};
+		const offPercentage = optionalNumber(value.frequency.offPercentage, 'off percentage');
+		if (offPercentage !== undefined) {
+			parameters.frequency.offPercentage = offPercentage;
+		} else if (hasOff) {
+			if (!Number.isFinite(totalWeight) || totalWeight <= 0 || offWeight < 0 || offWeight > totalWeight) {
+				throw(new Error('Legacy random profile off distribution is invalid.'));
+			}
+			parameters.frequency.offPercentage = Math.round(100 * offWeight / totalWeight);
+		}
+		if (hasOff && ranges.length === 0) {
+			parameters.frequency.ranges = [{ min: 10 }];
+		}
 		const basename = value.basename;
 		if (typeof basename === 'string') {
 			parameters.basename = basename;
@@ -69,7 +102,7 @@ function decodeRandomParameters(value: unknown, allowLegacy: boolean): RandomSes
 			parameters.power.perChannel = value.power.perChannel;
 		}
 		if (value.coupling !== undefined) {
-			if (!isRecord(value.coupling) || typeof value.coupling.min !== 'number') {
+			if (!isRecord(value.coupling) || typeof value.coupling.min !== 'number' || !Number.isFinite(value.coupling.min)) {
 				throw(new Error('Random profile coupling is invalid.'));
 			}
 			const coupling: NonNullable<RandomSessionParameters['coupling']> = { min: value.coupling.min };
@@ -83,9 +116,19 @@ function decodeRandomParameters(value: unknown, allowLegacy: boolean): RandomSes
 			}
 			parameters.coupling = coupling;
 		}
+		if (value.abCoupling !== undefined) {
+			if (!isRecord(value.abCoupling)) {
+				throw(new Error('Random profile A/B coupling is invalid.'));
+			}
+			parameters.abCoupling = {};
+			const distribution = optionalNumber(value.abCoupling.distribution, 'A/B coupling distribution');
+			if (distribution !== undefined) {
+				parameters.abCoupling.distribution = distribution;
+			}
+		}
 		return(parameters);
 	}
-	if (!allowLegacy || typeof value.freqMin !== 'number' || typeof value.powerMin !== 'number') {
+	if (!allowLegacy || typeof value.freqMin !== 'number' || !Number.isFinite(value.freqMin) || typeof value.powerMin !== 'number' || !Number.isFinite(value.powerMin)) {
 		throw(new Error('Random profile has invalid required parameters.'));
 	}
 	const parameters: RandomSessionParameters = {
@@ -102,7 +145,7 @@ function decodeRandomParameters(value: unknown, allowLegacy: boolean): RandomSes
 		parameters.basename = value.basename;
 	}
 	if (freqMaximum !== undefined) {
-		parameters.frequency.ranges[0]!.max = freqMaximum;
+		parameters.frequency.ranges[0] = { min: value.freqMin, max: freqMaximum };
 	}
 	if (powerMaximum !== undefined) {
 		parameters.power.max = powerMaximum;
@@ -130,6 +173,45 @@ function decodeProfile(value: unknown, allowLegacyRandomParameters: boolean): Se
 		return({ kind: 'file', name: value.name, fileName: value.fileName, fileData: value.fileData });
 	}
 	if (value.kind === 'random') {
+		if ('input' in value) {
+			let input = value.input;
+			if (allowLegacyRandomParameters && isRecord(input) && !('frequencyOffPercentage' in input) && Array.isArray(input.frequencyRanges)) {
+				let offWeight = 0;
+				let totalWeight = 0;
+				const ranges = [];
+				for (const range of input.frequencyRanges) {
+					if (!isRecord(range) || typeof range.off !== 'boolean' || typeof range.min !== 'string' || typeof range.max !== 'string' || typeof range.weight !== 'string') {
+						throw(new Error('Random profile draft input is invalid.'));
+					}
+					let weight = 100 / input.frequencyRanges.length;
+					if (range.weight.trim() !== '') {
+						weight = Number(range.weight);
+					}
+					totalWeight += weight;
+					if (range.off) {
+						offWeight += weight;
+					} else {
+						ranges.push({ min: range.min, max: range.max });
+					}
+				}
+				let offPercentage = '0';
+				if (offWeight !== 0) {
+					if (!Number.isFinite(totalWeight) || totalWeight <= 0 || offWeight < 0 || offWeight > totalWeight) {
+						offPercentage = 'Invalid legacy off distribution';
+					} else {
+						offPercentage = String(Math.round(100 * offWeight / totalWeight));
+					}
+				}
+				if (ranges.length === 0 && input.frequencyRanges.length > 0) {
+					ranges.push({ min: '10', max: '' });
+				}
+				input = { ...input, frequencyRanges: ranges, frequencyOffPercentage: offPercentage };
+			}
+			if ('parameters' in value || !isRandomFormValues(input)) {
+				throw(new Error('Random profile draft input is invalid.'));
+			}
+			return({ kind: 'random', name: value.name, input: input });
+		}
 		return({ kind: 'random', name: value.name, parameters: decodeRandomParameters(value.parameters, allowLegacyRandomParameters) });
 	}
 	if (value.kind === 'ai') {
@@ -140,14 +222,14 @@ function decodeProfile(value: unknown, allowLegacyRandomParameters: boolean): Se
 
 export function encapsulateProfiles(profiles: StoredProfile[]): string {
 	for (const storedProfile of profiles) {
-		validateProfile(storedProfile.profile);
+		validateProfile(decodeProfile(storedProfile.profile, true));
 	}
 	const document: StoredProfilesDocument = { version: 1, profiles: profiles };
 	return(JSON.stringify(document));
 }
 
 export function encapsulateSharedProfile(profile: SessionProfile): string {
-	validateProfile(profile);
+	validateProfile(decodeProfile(profile, false));
 	const document: SharedProfileDocument = { version: 1, profile: profile };
 	return(JSON.stringify(document, undefined, 2));
 }

@@ -5,7 +5,7 @@
     "version": "0.1.0",
     "orientation": "portrait",
     "jsEngine": "jsc",
-    "userInterfaceStyle": "dark",
+    "userInterfaceStyle": "automatic",
     "icon": "./logo/icon-input.png",
     "splash": {
       "image": "./logo/brainkandi.png",
