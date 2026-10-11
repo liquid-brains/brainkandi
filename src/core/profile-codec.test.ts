@@ -98,6 +98,18 @@ describe('profile serialization', function () {
 		expect(decapsulateSharedProfile(encapsulateSharedProfile(profile))).toEqual(profile);
 	});
 
+	it('preserves the advanced random profile editor preference', function () {
+		const profile: StoredProfile['profile'] = {
+			kind: 'random',
+			name: 'Advanced',
+			advanced: true,
+			parameters: { duration: 5, frequency: { ranges: [{ min: 10 }] }, power: { min: 1 } }
+		};
+
+		expect(decapsulateProfiles(encapsulateProfiles([{ id: 'advanced' as StoredProfile['id'], profile: profile }]))[0]?.profile).toEqual(profile);
+		expect(decapsulateSharedProfile(encapsulateSharedProfile(profile))).toEqual(profile);
+	});
+
 	it.each([
 		{ off: false },
 		{ off: 'true' },

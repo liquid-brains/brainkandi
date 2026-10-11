@@ -150,12 +150,12 @@ export function randomParametersFromForm(values: FormValues): RandomSessionParam
 	return(parseRandomForm(values).parameters);
 }
 
-export function randomProfileFromForm(name: string, values: FormValues): RandomProfile {
+export function randomProfileFromForm(name: string, values: FormValues, advanced = false): RandomProfile {
 	const parsed = parseRandomForm(values);
 	if (parsed.errors.length > 0) {
-		return({ kind: 'random', name: name, input: values });
+		return({ kind: 'random', name: name, ...(advanced ? { advanced: true } : {}), input: values });
 	}
-	return({ kind: 'random', name: name, parameters: parsed.parameters });
+	return({ kind: 'random', name: name, ...(advanced ? { advanced: true } : {}), parameters: parsed.parameters });
 }
 
 export function randomFormFromProfile(profile: RandomProfile): FormValues {

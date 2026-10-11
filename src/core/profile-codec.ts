@@ -194,6 +194,10 @@ function decodeProfile(value: unknown, allowLegacyRandomParameters: boolean, seq
 		return({ kind: 'sequence', name: value.name, steps: steps });
 	}
 	if (value.kind === 'random') {
+		if (value.advanced !== undefined && typeof value.advanced !== 'boolean') {
+			throw(new Error('Random profile advanced setting is invalid.'));
+		}
+		const advanced = value.advanced === true ? { advanced: true } : {};
 		if ('input' in value) {
 			let input = value.input;
 			if (allowLegacyRandomParameters && isRecord(input) && !('frequencyOffPercentage' in input) && Array.isArray(input.frequencyRanges)) {
@@ -231,9 +235,9 @@ function decodeProfile(value: unknown, allowLegacyRandomParameters: boolean, seq
 			if ('parameters' in value || !isRandomFormValues(input)) {
 				throw(new Error('Random profile draft input is invalid.'));
 			}
-			return({ kind: 'random', name: value.name, input: input });
+			return({ kind: 'random', name: value.name, ...advanced, input: input });
 		}
-		return({ kind: 'random', name: value.name, parameters: decodeRandomParameters(value.parameters, allowLegacyRandomParameters) });
+		return({ kind: 'random', name: value.name, ...advanced, parameters: decodeRandomParameters(value.parameters, allowLegacyRandomParameters) });
 	}
 	if (value.kind === 'ai') {
 		return({ kind: 'ai', name: value.name });

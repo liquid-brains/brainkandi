@@ -16,6 +16,7 @@ export type FileProfile = {
 export type RandomProfile = {
 	kind: 'random';
 	name: string;
+	advanced?: boolean;
 } & ({
 	parameters: RandomSessionParameters;
 	input?: never;

@@ -117,6 +117,7 @@ type ProfileEditorValues = {
 	fileName: string;
 	fileJSON: string;
 	randomForm: FormValues;
+	advanced: boolean;
 	steps: SequenceStep[];
 };
 
@@ -132,7 +133,7 @@ function profileFromEditorValues(values: ProfileEditorValues): SessionProfile {
 	if (values.kind === 'sequence') {
 		return({ kind: 'sequence', name: values.name, steps: values.steps });
 	}
-	return(randomProfileFromForm(values.name, values.randomForm));
+	return(randomProfileFromForm(values.name, values.randomForm, values.advanced));
 }
 
 function initialJourneyFiles(profile: SessionProfile): JourneyFile[] {
@@ -480,6 +481,7 @@ export default function App(): React.JSX.Element {
 				fileName: profile.profile.fileName,
 				fileJSON: JSON.stringify(profile.profile.fileData, undefined, 2),
 				randomForm: defaultFormValues,
+				advanced: false,
 				steps: []
 			});
 			return;
@@ -491,6 +493,7 @@ export default function App(): React.JSX.Element {
 				fileName: 'session.vnp0',
 				fileJSON: '{}',
 				randomForm: defaultFormValues,
+				advanced: false,
 				steps: profile.profile.steps
 			});
 			return;
@@ -501,6 +504,7 @@ export default function App(): React.JSX.Element {
 			fileName: 'session.vnp0',
 			fileJSON: '{}',
 			randomForm: randomFormFromProfile(profile.profile),
+			advanced: profile.profile.advanced ?? false,
 			steps: []
 		});
 	}
@@ -525,6 +529,7 @@ export default function App(): React.JSX.Element {
 				fileName: 'tmp1.vnp0',
 				fileJSON: defaultFileProfileJSON,
 				randomForm: defaultFormValues,
+				advanced: false,
 				steps: []
 			});
 			return;
@@ -539,6 +544,7 @@ export default function App(): React.JSX.Element {
 			fileName: 'session.vnp0',
 			fileJSON: '{}',
 			randomForm: defaultFormValues,
+			advanced: false,
 			steps: []
 		});
 	}
@@ -1138,6 +1144,12 @@ function ProfileEditorModal(props: {
 		return(
 			<Section title="Random profile">
 				<Field label="Profile name" value={props.values.name} onChangeText={function (name): void { props.onChangeValues(function (current): ProfileEditorValues { return({ ...current, name: name }); }); }} />
+				<View style={styles.settingRow}>
+					<Text style={styles.label}>Profile fields: {props.values.advanced ? 'Advanced' : 'Basic'}</Text>
+					<Switch accessibilityLabel="Advanced random profile fields" value={props.values.advanced} onValueChange={function (advanced): void {
+						props.onChangeValues(function (current): ProfileEditorValues { return({ ...current, advanced: advanced }); });
+					}} />
+				</View>
 				<Field label="Generated file name prefix" error={fieldError('basename')} value={props.values.randomForm.basename} onChangeText={function (basename): void { props.onChangeValues(function (current): ProfileEditorValues { return({ ...current, randomForm: { ...current.randomForm, basename: basename } }); }); }} autoCapitalize="none" helpText="The beginning of each generated filename on the device. Must not contain a period." />
 				<Field label="Duration (minutes)" error={fieldError('duration')} value={props.values.randomForm.duration} onChangeText={function (duration): void { props.onChangeValues(function (current): ProfileEditorValues { return({ ...current, randomForm: { ...current.randomForm, duration: duration } }); }); }} keyboardType="numeric" helpText="The total session duration: a whole number from 1 through 60 minutes." />
 				{validationErrors.length > 10000 /* TMP */ && <Text style={styles.fieldError}>This profile can be saved, but cannot run until the highlighted fields are corrected.</Text>}
@@ -1159,9 +1171,11 @@ function ProfileEditorModal(props: {
 				<Field label="Power minimum" error={fieldError('power.min')} value={props.values.randomForm.powerMin} onChangeText={function (powerMin): void { updateRandomForm(function (form): FormValues { return({ ...form, powerMin: powerMin }); }); }} keyboardType="numeric" helpText="The lowest power value used during the session." />
 				<Field label="Power maximum (optional)" error={fieldError('power.max')} value={props.values.randomForm.powerMax} onChangeText={function (powerMax): void { updateRandomForm(function (form): FormValues { return({ ...form, powerMax: powerMax }); }); }} keyboardType="numeric" helpText="The highest power value available. Leave blank to use the power minimum throughout the session." />
 				<Button title={`Power randomization: ${props.values.randomForm.powerPerChannel ? 'per LED' : 'per session'}`} onPress={function (): void { updateRandomForm(function (form): FormValues { return({ ...form, powerPerChannel: !form.powerPerChannel }); }); }} />
-				<Field label="Cross-coupling minimum (optional)" error={fieldError('coupling.min')} value={props.values.randomForm.couplingMin} onChangeText={function (couplingMin): void { updateRandomForm(function (form): FormValues { return({ ...form, couplingMin: couplingMin }); }); }} keyboardType="numeric" helpText="Enables cross-coupling and sets its lowest frequency. Leave both cross-coupling fields blank to disable cross-coupling." />
-				<Field label="Cross-coupling maximum (optional)" error={fieldError('coupling.max')} value={props.values.randomForm.couplingMax} onChangeText={function (couplingMax): void { updateRandomForm(function (form): FormValues { return({ ...form, couplingMax: couplingMax }); }); }} keyboardType="numeric" helpText="The highest cross-coupling frequency. Leave blank to use the cross-coupling minimum." />
-				<Field label="Cross-coupling distribution (%)" error={fieldError('coupling.distribution')} value={props.values.randomForm.couplingRandomDistribution} onChangeText={function (couplingRandomDistribution): void { updateRandomForm(function (form): FormValues { return({ ...form, couplingRandomDistribution: couplingRandomDistribution }); }); }} keyboardType="numeric" helpText="For each active module, the percentage chance that it applies the cross-coupling setting." />
+				{props.values.advanced && <>
+					<Field label="Cross-coupling minimum (optional)" error={fieldError('coupling.min')} value={props.values.randomForm.couplingMin} onChangeText={function (couplingMin): void { updateRandomForm(function (form): FormValues { return({ ...form, couplingMin: couplingMin }); }); }} keyboardType="numeric" helpText="Enables cross-coupling and sets its lowest frequency. Leave both cross-coupling fields blank to disable cross-coupling." />
+					<Field label="Cross-coupling maximum (optional)" error={fieldError('coupling.max')} value={props.values.randomForm.couplingMax} onChangeText={function (couplingMax): void { updateRandomForm(function (form): FormValues { return({ ...form, couplingMax: couplingMax }); }); }} keyboardType="numeric" helpText="The highest cross-coupling frequency. Leave blank to use the cross-coupling minimum." />
+					<Field label="Cross-coupling distribution (%)" error={fieldError('coupling.distribution')} value={props.values.randomForm.couplingRandomDistribution} onChangeText={function (couplingRandomDistribution): void { updateRandomForm(function (form): FormValues { return({ ...form, couplingRandomDistribution: couplingRandomDistribution }); }); }} keyboardType="numeric" helpText="For each active module, the percentage chance that it applies the cross-coupling setting." />
+				</>}
 			</Section>
 		);
 	}
