@@ -180,6 +180,8 @@ type ProfileEditorValues = {
 	steps: SequenceStep[];
 };
 
+type JournalSort = 'newest' | 'oldest' | 'rating-high' | 'rating-low';
+
 function profileFromEditorValues(values: ProfileEditorValues): SessionProfile {
 	if (values.kind === 'file') {
 		return({
@@ -288,6 +290,26 @@ function journeyDescription(journey: Journey): string {
 	}
 }
 
+function sortedJourneys(journeys: Journey[], sort: JournalSort): Journey[] {
+	const sorted = [...journeys];
+	if (sort === 'newest' || sort === 'oldest') {
+		return(sorted.sort(function (left, right): number {
+			const difference = Date.parse(right.startedAt) - Date.parse(left.startedAt);
+			return(sort === 'newest' ? difference : -difference);
+		}));
+	}
+	return(sorted.sort(function (left, right): number {
+		if (left.rating === undefined) {
+			return(right.rating === undefined ? Date.parse(right.startedAt) - Date.parse(left.startedAt) : 1);
+		}
+		if (right.rating === undefined) {
+			return(-1);
+		}
+		const difference = sort === 'rating-high' ? right.rating - left.rating : left.rating - right.rating;
+		return(difference === 0 ? Date.parse(right.startedAt) - Date.parse(left.startedAt) : difference);
+	}));
+}
+
 export default function App(): React.JSX.Element {
 	const colorScheme = useColorScheme();
 	const [settings, setSettings] = useState<AppSettings>(defaultSettings);
@@ -307,7 +329,8 @@ export default function App(): React.JSX.Element {
 	const [isAddingDevice, setIsAddingDevice] = useState(false);
 	const [profiles, setProfiles] = useState<StoredProfile[]>([]);
 	const [journeys, setJourneys] = useState<Journey[]>([]);
-	const [visibleJourneyCount, setVisibleJourneyCount] = useState(3);
+	const [isJournalBrowserOpen, setIsJournalBrowserOpen] = useState(false);
+	const [journalSort, setJournalSort] = useState<JournalSort>('newest');
 	const [status, setStatus] = useState('Ready.');
 	const [isRunning, setIsRunning] = useState(false);
 	const didStopCurrentSession = useRef(false);
@@ -512,6 +535,16 @@ export default function App(): React.JSX.Element {
 			await journeyStore.remove(journey.id);
 			await loadJourneys();
 			setStatus(`Deleted journal record for ${journey.profile.name}.`);
+		} catch (error) {
+			setStatus(errorMessage(error));
+		}
+	}
+
+	async function deleteUnratedJourneys(): Promise<void> {
+		try {
+			const removedCount = await journeyStore.removeUnrated(activeJourneyID.current);
+			await loadJourneys();
+			setStatus(`Deleted ${removedCount} unrated journal record(s).`);
 		} catch (error) {
 			setStatus(errorMessage(error));
 		}
@@ -889,9 +922,9 @@ export default function App(): React.JSX.Element {
 
 						<Section title="Journal">
 							<Text style={styles.help}>Each session keeps the profile settings it started with, even if that profile is later changed.</Text>
-							{journeys.slice(0, visibleJourneyCount).map(renderJourney)}
+							{journeys.slice(0, 3).map(renderJourney)}
 							{journeys.length === 0 ? <Text style={styles.empty}>No journal records yet.</Text> : null}
-							{journeys.length > visibleJourneyCount ? <Button title={`View ${Math.min(10, journeys.length - visibleJourneyCount)} more journal records`} onPress={function (): void { setVisibleJourneyCount(function (count): number { return(count + 10); }); }} /> : null}
+							{journeys.length > 3 ? <Button title={`View all ${journeys.length} journal records`} onPress={function (): void { setIsJournalBrowserOpen(true); }} /> : null}
 						</Section>
 
 					</ScrollView>
@@ -935,6 +968,26 @@ export default function App(): React.JSX.Element {
 								</Section>
 							</ScrollView>
 						</KeyboardAvoidingView>
+					</SafeAreaView>
+				</Modal>
+				<Modal visible={isJournalBrowserOpen} animationType="slide" onRequestClose={function (): void { setIsJournalBrowserOpen(false); }}>
+					<SafeAreaView style={styles.documentModal}>
+						<View style={styles.settingsHeader}>
+							<Text style={styles.documentModalTitle}>All journal records</Text>
+							<Button title="Back" onPress={function (): void { setIsJournalBrowserOpen(false); }} />
+						</View>
+						<View style={styles.journalControls}>
+							<Text style={styles.label}>Sort</Text>
+							<Button title="Newest first" onPress={function (): void { setJournalSort('newest'); }} />
+							<Button title="Oldest first" onPress={function (): void { setJournalSort('oldest'); }} />
+							<Button title="Rating: high to low" onPress={function (): void { setJournalSort('rating-high'); }} />
+							<Button title="Rating: low to high" onPress={function (): void { setJournalSort('rating-low'); }} />
+							<Button title={`Delete ${journeys.filter(function (journey): boolean { return(journey.rating === undefined && journey.id !== activeJourneyID.current); }).length} unrated records`} color="#75113d" disabled={!journeys.some(function (journey): boolean { return(journey.rating === undefined && journey.id !== activeJourneyID.current); })} onPress={function (): void { void deleteUnratedJourneys(); }} />
+						</View>
+						<ScrollView contentContainerStyle={styles.editorForm} keyboardShouldPersistTaps="handled">
+							{sortedJourneys(journeys, journalSort).map(renderJourney)}
+							{journeys.length === 0 && <Text style={styles.empty}>No journal records yet.</Text>}
+						</ScrollView>
 					</SafeAreaView>
 				</Modal>
 				<ProfileEditorModal
@@ -1552,6 +1605,7 @@ function createStyles(colors: AppColors) {
 	parametersViewer: { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: 8, borderWidth: 1, flexGrow: 1, padding: 12 },
 	parametersText: { color: colors.inputText, fontFamily: 'monospace' },
 	editorForm: { gap: 10, paddingBottom: 8 },
+	journalControls: { gap: 8, paddingBottom: 12 },
 	profileTypeChoices: { gap: 10 },
 	frequencyRange: { borderColor: colors.border, borderRadius: 8, borderWidth: 1, gap: 8, padding: 10 },
 	sequenceSteps: { gap: 8 },

@@ -1,9 +1,19 @@
 import { describe, expect, it } from 'vitest';
 
-import { decapsulateJourneys, encapsulateJourneys } from './journey-store';
+import { decapsulateJourneys, encapsulateJourneys, retainRatedJourneys } from './journey-store';
 import type { Journey } from './journey-store';
 
 describe('journey serialization', function () {
+	it('removes unrated records while retaining an excluded active record', function () {
+		const journeys: Journey[] = [
+			{ id: 'unrated', profile: { kind: 'file', name: 'Unrated', fileName: 'unrated.vnp0', fileData: {} }, startedAt: '2026-10-04T21:00:00.000Z', outcome: 'completed', files: [] },
+			{ id: 'rated', profile: { kind: 'file', name: 'Rated', fileName: 'rated.vnp0', fileData: {} }, startedAt: '2026-10-04T21:00:00.000Z', outcome: 'completed', rating: 2, files: [] },
+			{ id: 'active', profile: { kind: 'file', name: 'Active', fileName: 'active.vnp0', fileData: {} }, startedAt: '2026-10-04T21:00:00.000Z', outcome: 'running', files: [] }
+		];
+
+		expect(retainRatedJourneys(journeys, 'active')).toEqual([journeys[1], journeys[2]]);
+	});
+
 	it('round-trips a rated stopped session with its profile snapshot', function () {
 		const journeys: Journey[] = [{
 			id: 'journey-1',

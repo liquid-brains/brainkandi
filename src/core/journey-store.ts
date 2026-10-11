@@ -65,6 +65,12 @@ export function createJourneyID(): string {
 	return(`journey_${Date.now().toString(36)}_${Math.floor(Math.random() * Number.MAX_SAFE_INTEGER).toString(36)}`);
 }
 
+export function retainRatedJourneys(journeys: Journey[], excludedJourneyID?: string): Journey[] {
+	return(journeys.filter(function (journey): boolean {
+		return(journey.rating !== undefined || journey.id === excludedJourneyID);
+	}));
+}
+
 export function encapsulateJourneys(journeys: Journey[]): string {
 	for (const journey of journeys) {
 		validateJourney(journey);
@@ -158,5 +164,15 @@ export class AsyncStorageJourneyStore {
 			throw(new Error('Journey does not exist.'));
 		}
 		await AsyncStorage.setItem(journeysStorageKey, encapsulateJourneys(remainingJourneys));
+	}
+
+	public async removeUnrated(excludedJourneyID?: string): Promise<number> {
+		const journeys = await this.list();
+		const remainingJourneys = retainRatedJourneys(journeys, excludedJourneyID);
+		const removedCount = journeys.length - remainingJourneys.length;
+		if (removedCount > 0) {
+			await AsyncStorage.setItem(journeysStorageKey, encapsulateJourneys(remainingJourneys));
+		}
+		return(removedCount);
 	}
 }
