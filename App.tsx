@@ -1583,7 +1583,7 @@ function createStyles(colors: AppColors) {
 	status: { color: colors.onBackground, fontSize: 16, fontWeight: '600' },
 	section: { backgroundColor: colors.section, borderRadius: 14, gap: 10, overflow: 'hidden', padding: 16, position: 'relative' },
 	sectionLift: { padding: 4, paddingBottom: 8, position: 'relative', transform: [{ translateY: -2 }] },
-	sectionDropShadow: { backgroundColor: 'rgba(77, 20, 48, 0.42)', borderRadius: 18, bottom: 2, left: 0, position: 'absolute', right: 0, top: 2 },
+	sectionDropShadow: { backgroundColor: 'rgba(77, 20, 48, 0.42)', borderRadius: 18, bottom: 8, left: 4, position: 'absolute', right: 0, top: 0 },
 	sectionGlass: { borderColor: 'rgba(255, 255, 255, 0.72)', borderWidth: 1, elevation: 4 },
 	sectionGlassHighlight: { backgroundColor: 'rgba(255, 255, 255, 0.28)', borderRadius: 14, height: '30%', left: 5, position: 'absolute', right: 5, top: 3 },
 	sectionTitle: { color: colors.title, fontSize: 21, fontWeight: '700' },
