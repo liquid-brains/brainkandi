@@ -244,11 +244,12 @@ function JourneyRatingButton(props: {
 			if (!useLiquidGlassButtons) {
 				return([styles.ratingButtonNormal, { backgroundColor: props.color }, props.disabled ? styles.ratingButtonDisabled : undefined]);
 			}
+			const glassColor = props.disabled ? '#6b7280' : props.color;
 			return([styles.ratingButton, webLiquidGlassStyle, {
-				backgroundColor: translucent(props.color, pressed ? 0.96 : 0.86),
-				borderColor: translucent(props.color, 0.8),
-				shadowColor: props.color
-			}, props.disabled ? styles.ratingButtonDisabled : undefined]);
+				backgroundColor: translucent(glassColor, pressed ? 0.96 : 0.86),
+				borderColor: translucent(glassColor, 0.8),
+				shadowColor: glassColor
+			}]);
 		}}>
 			{useLiquidGlassButtons && <View pointerEvents="none" style={styles.glassHighlight} />}
 			<Text style={styles.ratingThumbs}>{journeyThumbs(props.thumb, props.count)}</Text>
@@ -1048,6 +1049,7 @@ function Button({ title, color: requestedColor, disabled = false, onPress, ...pr
 	if (!useLiquidGlassButtons) {
 		return(<NativeButton {...props} color={color} disabled={disabled} onPress={onPress} title={title} />);
 	}
+	const glassColor = disabled ? '#6b7280' : color;
 	return(
 		<Pressable
 			{...props}
@@ -1056,10 +1058,10 @@ function Button({ title, color: requestedColor, disabled = false, onPress, ...pr
 			onPress={onPress}
 			style={function ({ pressed }) {
 				return([styles.glassButton, webLiquidGlassStyle, {
-					backgroundColor: translucent(color, pressed ? 0.96 : 0.86),
-					borderColor: translucent(color, 0.78),
-					shadowColor: color
-				}, disabled ? styles.glassButtonDisabled : undefined]);
+					backgroundColor: translucent(glassColor, pressed ? 0.96 : 0.86),
+					borderColor: translucent(glassColor, 0.78),
+					shadowColor: glassColor
+				}]);
 			}}
 		>
 			<View pointerEvents="none" style={styles.glassHighlight} />
@@ -1600,7 +1602,6 @@ function createStyles(colors: AppColors) {
 		shadowOpacity: 0.22,
 		shadowRadius: 6
 	},
-	glassButtonDisabled: { opacity: 0.42 },
 	glassButtonText: { color: '#fff', fontSize: 15, fontWeight: '700', textAlign: 'center' },
 	glassHighlight: { backgroundColor: 'rgba(255, 255, 255, 0.32)', borderRadius: 18, height: '42%', left: 3, position: 'absolute', right: 3, top: 2 },
 	ratingButtonNormal: { alignItems: 'center', borderRadius: 4, justifyContent: 'center', minHeight: 32, paddingHorizontal: 6 },
