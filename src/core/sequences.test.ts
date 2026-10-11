@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { createSequenceStep, resolveSequenceProfile, runnableProfileSteps, sequenceExternalProfiles, sequenceStepHasChanged } from './sequences';
+import { createSequenceStep, resolveSequenceProfile, runnableProfileSteps, sequenceExternalProfiles, sequenceStepHasChanged, synchronizeSequenceStep } from './sequences';
 import { decapsulateSharedProfile, encapsulateProfiles, encapsulateSharedProfile } from './profile-codec';
 import { validateProfile } from './profiles';
 import type { FileProfile, ProfileID, SequenceProfile, StoredProfile } from './profiles';
@@ -40,6 +40,25 @@ describe('sequence profiles', function () {
 		expect(sequenceStepHasChanged(step, [source])).toBe(false);
 		expect(sequenceStepHasChanged(step, [{ ...source, profile: { ...file, name: 'Changed' } }])).toBe(true);
 		expect(sequenceStepHasChanged(step, [])).toBe(true);
+	});
+
+	it('refreshes an out-of-date reference snapshot from its saved source', function () {
+		const step = createSequenceStep(source, 'reference');
+		const changed = { ...source, profile: { ...file, name: 'Changed', fileName: 'changed.vnp0' } };
+		const synchronized = synchronizeSequenceStep(step, [changed]);
+		expect(synchronized).toEqual({ mode: 'reference', profileID: source.id, profile: changed.profile });
+		expect(synchronized.profile).not.toBe(changed.profile);
+		expect(sequenceStepHasChanged(synchronized, [changed])).toBe(false);
+	});
+
+	it('preserves the inclusion mode when refreshing a legacy value snapshot', function () {
+		const step = createSequenceStep(source, 'value');
+		const changed = { ...source, profile: { ...file, name: 'Changed' } };
+		expect(synchronizeSequenceStep(step, [changed]).mode).toBe('value');
+	});
+
+	it('cannot refresh a reference after its saved source is deleted', function () {
+		expect(function (): void { synchronizeSequenceStep(createSequenceStep(source, 'reference'), []); }).toThrow('no longer exists');
 	});
 
 	it('does not mark identical file data with a different property order as changed', function () {

@@ -39,7 +39,7 @@ import type { Journey, JourneyFile, JourneyRating } from './src/core/journey-sto
 import { encapsulateSharedProfile } from './src/core/profile-codec';
 import type { ProfileID, SequenceStep, SessionProfile, StoredProfile } from './src/core/profiles';
 import { maximumSequenceDepth } from './src/core/profiles';
-import { createSequenceStep, resolveSequenceProfile, runnableProfileSteps, sequenceStepHasChanged, sequenceStepProfile } from './src/core/sequences';
+import { createSequenceStep, resolveSequenceProfile, runnableProfileSteps, sequenceStepHasChanged, synchronizeSequenceStep } from './src/core/sequences';
 import type { FormValues, FrequencyRangeForm } from './src/core/random-profile-form';
 import { defaultFormValues, getRandomFormValidationErrors, randomFormFromProfile, randomParametersFromProfile, randomProfileFromForm } from './src/core/random-profile-form';
 
@@ -998,33 +998,27 @@ function SequenceSteps(props: {
 						effectiveProfile = source.profile;
 					}
 				}
-				let suffix = '';
-				if (sequenceStepHasChanged(step, props.profiles)) {
-					suffix = ' \u2022';
-				}
+				const isOutOfDate = sequenceStepHasChanged(step, props.profiles);
+				const canSynchronize = isOutOfDate && source !== undefined && source.profile.kind !== 'ai';
 				return(
 					<View key={index} style={styles.sequenceStep}>
-						<Text style={styles.profileDescription}>{index + 1}. {name}{suffix}</Text>
-						<Text style={styles.help}>By {step.mode}</Text>
+						<Text style={styles.profileDescription}>{index + 1}. {name}{isOutOfDate ? ' \u2022' : ''}</Text>
+						{isOutOfDate && <Text style={styles.help}>{canSynchronize ? 'The saved profile has changed.' : 'The saved profile is missing.'}</Text>}
 						{effectiveProfile.kind === 'sequence' && depth < maximumSequenceDepth && <View style={styles.sequenceNestedSteps}>
 							<SequenceSteps steps={effectiveProfile.steps} profiles={props.profiles} depth={depth + 1} />
 						</View>}
 						{props.onChange !== undefined && <View style={styles.sequenceStepButtons}>
 							<Button title="Move up" disabled={index === 0} onPress={function (): void { move(index, -1); }} />
 							<Button title="Move down" disabled={index === props.steps.length - 1} onPress={function (): void { move(index, 1); }} />
-							<Button title="Change inclusion" onPress={function (): void {
-								let mode: SequenceStep['mode'] = 'reference';
-								if (step.mode === 'reference') {
-									mode = 'value';
-								}
-								const updated = createSequenceStep({ id: step.profileID, profile: sequenceStepProfile(step, props.profiles) }, mode);
+							{canSynchronize && <Button title="Update step" onPress={function (): void {
+								const updated = synchronizeSequenceStep(step, props.profiles);
 								props.onChange?.(props.steps.map(function (item, itemIndex): SequenceStep {
 									if (itemIndex === index) {
 										return(updated);
 									}
 									return(item);
 								}));
-							}} />
+							}} />}
 							<Button title="Remove step" color="#75113d" onPress={function (): void {
 								props.onChange?.(props.steps.filter(function (_, itemIndex): boolean { return(itemIndex !== index); }));
 							}} />
@@ -1050,13 +1044,9 @@ function ProfileEditorModal(props: {
 }): React.JSX.Element {
 	const { styles } = useContext(ThemeContext);
 	const [stepProfileID, setStepProfileID] = useState('');
-	const [stepMode, setStepMode] = useState<SequenceStep['mode']>('reference');
-	const [isShowingCopyHelp, setIsShowingCopyHelp] = useState(false);
 	useEffect(function (): void {
 		if (props.visible) {
 			setStepProfileID('');
-			setStepMode('reference');
-			setIsShowingCopyHelp(false);
 		}
 	}, [props.visible]);
 	let validationErrors: BrainlightError[] = [];
@@ -1090,9 +1080,8 @@ function ProfileEditorModal(props: {
 				<Section title="Profile type">
 					<Text style={styles.help}>Choose the type of profile to create.</Text>
 					<View style={styles.profileTypeChoices}>
-						<Button title="New random profile" onPress={function (): void { props.onSelectKind('random'); }} />
-						<Button title="New file profile" onPress={function (): void { props.onSelectKind('file'); }} />
-						<Button title="New sequence profile" onPress={function (): void { props.onSelectKind('sequence'); }} />
+						<Button title="New profile" onPress={function (): void { props.onSelectKind('random'); }} />
+						<Button title="New sequence" onPress={function (): void { props.onSelectKind('sequence'); }} />
 					</View>
 				</Section>
 			);
@@ -1124,9 +1113,9 @@ function ProfileEditorModal(props: {
 				sequenceError = errorMessage(error);
 			}
 			return(
-				<Section title="Sequence profile">
-					<Field label="Profile name" value={props.values.name} onChangeText={function (name): void { props.onChangeValues(function (current): ProfileEditorValues { return({ ...current, name: name }); }); }} />
-					<Text style={styles.help}>Steps run in order. References follow edits to saved profiles; values keep independent copies. A dot after a step name means its stored copy differs from the source, or the source is missing. Nesting is limited to 10 sequence levels.</Text>
+				<Section title="Sequence">
+					<Field label="Sequence name" value={props.values.name} onChangeText={function (name): void { props.onChangeValues(function (current): ProfileEditorValues { return({ ...current, name: name }); }); }} />
+					<Text style={styles.help}>New steps run in order and refer to saved profiles. A dot after a step name means its stored copy differs from the source, or the source is missing. Use Update step to refresh an available source into the sequence. Nesting is limited to 10 sequence levels.</Text>
 					{sequenceError !== undefined && <Text style={styles.fieldError}>Cannot run: {sequenceError}</Text>}
 					<SequenceSteps steps={props.values.steps} profiles={props.profiles} onChange={function (steps): void {
 						props.onChangeValues(function (current): ProfileEditorValues { return({ ...current, steps: steps }); });
@@ -1136,22 +1125,9 @@ function ProfileEditorModal(props: {
 						<Picker.Item label="Select a saved profile" value="" />
 						{eligible.map(function (item): React.JSX.Element { return(<Picker.Item key={item.id} label={item.profile.name} value={item.id} />); })}
 					</Picker>
-					<View style={styles.settingRow}>
-						<View style={styles.labelRow}>
-							<Text style={styles.label}>Copy into sequence</Text>
-							{renderFieldHelp('Copy into sequence', 'On: copy the profile into this sequence (by value). Later edits to the saved profile do not change this copy. Off: include the saved profile by reference, so later edits apply to this sequence too. Copying a Sequence preserves any references within its steps.', isShowingCopyHelp, setIsShowingCopyHelp, styles)}
-						</View>
-						<Switch accessibilityLabel="Copy into sequence" value={stepMode === 'value'} onValueChange={function (copy): void {
-							if (copy) {
-								setStepMode('value');
-							} else {
-								setStepMode('reference');
-							}
-						}} />
-					</View>
 					<Button title="Add step" disabled={selected === undefined} onPress={function (): void {
 						if (selected !== undefined) {
-							const step = createSequenceStep(selected, stepMode);
+							const step = createSequenceStep(selected, 'reference');
 							props.onChangeValues(function (current): ProfileEditorValues { return({ ...current, steps: [...current.steps, step] }); });
 						}
 					}} />
@@ -1164,7 +1140,9 @@ function ProfileEditorModal(props: {
 				<Field label="Profile name" value={props.values.name} onChangeText={function (name): void { props.onChangeValues(function (current): ProfileEditorValues { return({ ...current, name: name }); }); }} />
 				<Field label="Generated file name prefix" error={fieldError('basename')} value={props.values.randomForm.basename} onChangeText={function (basename): void { props.onChangeValues(function (current): ProfileEditorValues { return({ ...current, randomForm: { ...current.randomForm, basename: basename } }); }); }} autoCapitalize="none" helpText="The beginning of each generated filename on the device. Must not contain a period." />
 				<Field label="Duration (minutes)" error={fieldError('duration')} value={props.values.randomForm.duration} onChangeText={function (duration): void { props.onChangeValues(function (current): ProfileEditorValues { return({ ...current, randomForm: { ...current.randomForm, duration: duration } }); }); }} keyboardType="numeric" helpText="The total session duration: a whole number from 1 through 60 minutes." />
-				{validationErrors.length > 0 && <Text style={styles.fieldError}>This profile can be saved, but cannot run until the highlighted fields are corrected.</Text>}
+				{validationErrors.length > 10000 /* TMP */ && <Text style={styles.fieldError}>This profile can be saved, but cannot run until the highlighted fields are corrected.</Text>}
+				<Field label="Phase A probability (%, optional)" error={fieldError('abCoupling.distribution')} value={props.values.randomForm.abCouplingDistribution} onChangeText={function (abCouplingDistribution): void { updateRandomForm(function (form): FormValues { return({ ...form, abCouplingDistribution: abCouplingDistribution }); }); }} keyboardType="numeric" helpText="For each LED, the chance of selecting Phase A rather than Phase B, independent of cross-coupling. Use a whole percentage from 0 through 100. Leave blank for 50%; 0 selects only Phase B and 100 selects only Phase A." />
+				<Field label="Percent probability an LED will be off (optional)" error={fieldError('frequency.offPercentage')} value={props.values.randomForm.frequencyOffPercentage} onChangeText={function (frequencyOffPercentage): void { updateRandomForm(function (form): FormValues { return({ ...form, frequencyOffPercentage: frequencyOffPercentage }); }); }} keyboardType="numeric" helpText="The percentage chance that each LED is off, independently of the selected frequency and other LEDs. Use a whole percentage from 0 through 100. Zero or blank means no LEDs are off (default); 100 means all LEDs are off. This is a probability, not a guaranteed exact proportion in each session part." />
 				<Text style={styles.label}>Frequency ranges</Text>
 				{fieldError('frequency.ranges') !== undefined && <Text style={styles.fieldError}>{fieldError('frequency.ranges')}</Text>}
 				{props.values.randomForm.frequencyRanges.map(function (range, index): React.JSX.Element {
@@ -1177,15 +1155,13 @@ function ProfileEditorModal(props: {
 					);
 				})}
 				<Button title="Add frequency range" onPress={function (): void { updateRandomForm(function (form): FormValues { return({ ...form, frequencyRanges: [...form.frequencyRanges, { min: '', max: '' }] }); }); }} />
-				<Field label="Off %" error={fieldError('frequency.offPercentage')} value={props.values.randomForm.frequencyOffPercentage} onChangeText={function (frequencyOffPercentage): void { updateRandomForm(function (form): FormValues { return({ ...form, frequencyOffPercentage: frequencyOffPercentage }); }); }} keyboardType="numeric" helpText="The percentage chance that each channel is off, independently of the selected frequency and other channels. Use a whole percentage from 0 through 100. Zero or blank means no channels are off; 100 means all channels are off. This is a probability, not a guaranteed exact proportion in each session part." />
-				<Button title={`Frequency randomization: ${props.values.randomForm.frequencyPerChannel ? 'per channel' : 'per session'}`} onPress={function (): void { updateRandomForm(function (form): FormValues { return({ ...form, frequencyPerChannel: !form.frequencyPerChannel }); }); }} />
+				<Button title={`Frequency randomization: ${props.values.randomForm.frequencyPerChannel ? 'per LED' : 'per session'}`} onPress={function (): void { updateRandomForm(function (form): FormValues { return({ ...form, frequencyPerChannel: !form.frequencyPerChannel }); }); }} />
 				<Field label="Power minimum" error={fieldError('power.min')} value={props.values.randomForm.powerMin} onChangeText={function (powerMin): void { updateRandomForm(function (form): FormValues { return({ ...form, powerMin: powerMin }); }); }} keyboardType="numeric" helpText="The lowest power value used during the session." />
 				<Field label="Power maximum (optional)" error={fieldError('power.max')} value={props.values.randomForm.powerMax} onChangeText={function (powerMax): void { updateRandomForm(function (form): FormValues { return({ ...form, powerMax: powerMax }); }); }} keyboardType="numeric" helpText="The highest power value available. Leave blank to use the power minimum throughout the session." />
-				<Button title={`Power randomization: ${props.values.randomForm.powerPerChannel ? 'per channel' : 'per session'}`} onPress={function (): void { updateRandomForm(function (form): FormValues { return({ ...form, powerPerChannel: !form.powerPerChannel }); }); }} />
+				<Button title={`Power randomization: ${props.values.randomForm.powerPerChannel ? 'per LED' : 'per session'}`} onPress={function (): void { updateRandomForm(function (form): FormValues { return({ ...form, powerPerChannel: !form.powerPerChannel }); }); }} />
 				<Field label="Cross-coupling minimum (optional)" error={fieldError('coupling.min')} value={props.values.randomForm.couplingMin} onChangeText={function (couplingMin): void { updateRandomForm(function (form): FormValues { return({ ...form, couplingMin: couplingMin }); }); }} keyboardType="numeric" helpText="Enables cross-coupling and sets its lowest frequency. Leave both cross-coupling fields blank to disable cross-coupling." />
 				<Field label="Cross-coupling maximum (optional)" error={fieldError('coupling.max')} value={props.values.randomForm.couplingMax} onChangeText={function (couplingMax): void { updateRandomForm(function (form): FormValues { return({ ...form, couplingMax: couplingMax }); }); }} keyboardType="numeric" helpText="The highest cross-coupling frequency. Leave blank to use the cross-coupling minimum." />
 				<Field label="Cross-coupling distribution (%)" error={fieldError('coupling.distribution')} value={props.values.randomForm.couplingRandomDistribution} onChangeText={function (couplingRandomDistribution): void { updateRandomForm(function (form): FormValues { return({ ...form, couplingRandomDistribution: couplingRandomDistribution }); }); }} keyboardType="numeric" helpText="For each active module, the percentage chance that it applies the cross-coupling setting." />
-				<Field label="Phase A probability (%, optional)" error={fieldError('abCoupling.distribution')} value={props.values.randomForm.abCouplingDistribution} onChangeText={function (abCouplingDistribution): void { updateRandomForm(function (form): FormValues { return({ ...form, abCouplingDistribution: abCouplingDistribution }); }); }} keyboardType="numeric" helpText="For each channel, the chance of selecting Phase A rather than Phase B, independent of cross-coupling. Use a whole percentage from 0 through 100. Leave blank for 50%; 0 selects only Phase B and 100 selects only Phase A." />
 			</Section>
 		);
 	}

@@ -44,6 +44,21 @@ export function sequenceStepHasChanged(step: SequenceStep, profiles: StoredProfi
 	return(stored === undefined || comparableJSON(stored.profile) !== comparableJSON(step.profile));
 }
 
+export function synchronizeSequenceStep(step: SequenceStep, profiles: StoredProfile[]): SequenceStep {
+	const stored = profiles.find(function (profile): boolean { return(profile.id === step.profileID); });
+	if (stored === undefined) {
+		throw(new Error(`Referenced profile "${step.profile.name}" no longer exists.`));
+	}
+	if (stored.profile.kind === 'ai') {
+		throw(new Error(`Referenced profile "${stored.profile.name}" is not supported in a sequence.`));
+	}
+	return({
+		mode: step.mode,
+		profileID: stored.id,
+		profile: JSON.parse(JSON.stringify(stored.profile)) as SequenceStep['profile']
+	});
+}
+
 export function resolveSequenceProfile(profile: SessionProfile, profiles: StoredProfile[], sequenceDepth = 0, referencePath = new Set<string>()): SessionProfile {
 	if (profile.kind !== 'sequence') {
 		return(profile);
