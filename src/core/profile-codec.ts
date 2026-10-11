@@ -1,15 +1,17 @@
-import type { RandomSessionParameters, SessionProfile, StoredProfile } from './profiles';
-import { validateProfile } from './profiles';
+import type { RandomSessionParameters, SequenceStep, SessionProfile, StoredProfile } from './profiles';
+import { maximumSequenceDepth, validateProfile } from './profiles';
 import { isRandomFormValues } from './random-profile-form';
+import { resolveSequenceProfile, sequenceExternalProfiles } from './sequences';
 
 type StoredProfilesDocument = {
 	version: 1;
 	profiles: StoredProfile[];
 };
 
-type SharedProfileDocument = {
+export type SharedProfileDocument = {
 	version: 1;
 	profile: SessionProfile;
+	external?: StoredProfile[];
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -162,7 +164,7 @@ function decodeRandomParameters(value: unknown, allowLegacy: boolean): RandomSes
 	return(parameters);
 }
 
-function decodeProfile(value: unknown, allowLegacyRandomParameters: boolean): SessionProfile {
+function decodeProfile(value: unknown, allowLegacyRandomParameters: boolean, sequenceDepth = 0): SessionProfile {
 	if (!isRecord(value) || typeof value.name !== 'string' || typeof value.kind !== 'string') {
 		throw(new Error('Profile has an invalid format.'));
 	}
@@ -171,6 +173,25 @@ function decodeProfile(value: unknown, allowLegacyRandomParameters: boolean): Se
 			throw(new Error('File profile has an invalid format.'));
 		}
 		return({ kind: 'file', name: value.name, fileName: value.fileName, fileData: value.fileData });
+	}
+	if (value.kind === 'sequence') {
+		if (sequenceDepth >= maximumSequenceDepth) {
+			throw(new Error(`Sequences may nest at most ${maximumSequenceDepth} levels deep.`));
+		}
+		if (!Array.isArray(value.steps)) {
+			throw(new Error('Sequence profile has invalid steps.'));
+		}
+		const steps = value.steps.map(function (step): SequenceStep {
+			if (!isRecord(step) || (step.mode !== 'reference' && step.mode !== 'value') || typeof step.profileID !== 'string' || step.profileID.trim() === '') {
+				throw(new Error('Sequence step has an invalid format.'));
+			}
+			const profile = decodeProfile(step.profile, allowLegacyRandomParameters, sequenceDepth + 1);
+			if (profile.kind === 'ai') {
+				throw(new Error('Sequences can contain only Random, File, or Sequence profiles.'));
+			}
+			return({ mode: step.mode, profileID: step.profileID as StoredProfile['id'], profile: profile });
+		});
+		return({ kind: 'sequence', name: value.name, steps: steps });
 	}
 	if (value.kind === 'random') {
 		if ('input' in value) {
@@ -228,13 +249,20 @@ export function encapsulateProfiles(profiles: StoredProfile[]): string {
 	return(JSON.stringify(document));
 }
 
-export function encapsulateSharedProfile(profile: SessionProfile): string {
+export function encapsulateSharedProfile(profile: SessionProfile, profiles: StoredProfile[] = []): string {
 	validateProfile(decodeProfile(profile, false));
 	const document: SharedProfileDocument = { version: 1, profile: profile };
+	const external = sequenceExternalProfiles(profile, profiles);
+	if (external.length > 0) {
+		for (const item of external) {
+			validateProfile(decodeProfile(item.profile, false));
+		}
+		document.external = external;
+	}
 	return(JSON.stringify(document, undefined, 2));
 }
 
-export function decapsulateSharedProfile(serialized: string): SessionProfile {
+export function decapsulateSharedProfileDocument(serialized: string): SharedProfileDocument {
 	let value: unknown;
 	try {
 		value = JSON.parse(serialized);
@@ -246,7 +274,31 @@ export function decapsulateSharedProfile(serialized: string): SessionProfile {
 	}
 	const profile = decodeProfile(value.profile, false);
 	validateProfile(profile);
-	return(profile);
+	const document: SharedProfileDocument = { version: 1, profile: profile };
+	if (value.external !== undefined) {
+		if (!Array.isArray(value.external)) {
+			throw(new Error('Shared profile external profiles have an invalid format.'));
+		}
+		const identifiers = new Set<string>();
+		document.external = value.external.map(function (item): StoredProfile {
+			if (!isRecord(item) || typeof item.id !== 'string' || item.id.trim() === '' || identifiers.has(item.id)) {
+				throw(new Error('Shared profile external identifiers must be non-empty and unique.'));
+			}
+			identifiers.add(item.id);
+			const externalProfile = decodeProfile(item.profile, false);
+			if (externalProfile.kind === 'ai') {
+				throw(new Error('Sequence external profiles must be Random, File, or Sequence profiles.'));
+			}
+			validateProfile(externalProfile);
+			return({ id: item.id as StoredProfile['id'], profile: externalProfile });
+		});
+	}
+	resolveSequenceProfile(profile, document.external ?? []);
+	return(document);
+}
+
+export function decapsulateSharedProfile(serialized: string): SessionProfile {
+	return(decapsulateSharedProfileDocument(serialized).profile);
 }
 
 export function decapsulateProfiles(serialized: string): StoredProfile[] {

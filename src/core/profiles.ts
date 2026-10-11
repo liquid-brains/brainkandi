@@ -29,7 +29,20 @@ export type AIProfile = {
 	name: string;
 };
 
-export type SessionProfile = FileProfile | RandomProfile | AIProfile;
+export type SequenceStep = {
+	mode: 'reference' | 'value';
+	profileID: ProfileID;
+	profile: FileProfile | RandomProfile | SequenceProfile;
+};
+
+export type SequenceProfile = {
+	kind: 'sequence';
+	name: string;
+	steps: SequenceStep[];
+};
+
+export type SessionProfile = FileProfile | RandomProfile | SequenceProfile | AIProfile;
+export const maximumSequenceDepth = 10;
 
 export type ProfileID = string & { readonly ProfileID: unique symbol };
 
@@ -48,7 +61,7 @@ export function validateRandomSessionParameters(parameters: RandomSessionParamet
 	VielightDevice.validateRandomParams(parameters);
 }
 
-export function validateProfile(profile: SessionProfile): void {
+export function validateProfile(profile: SessionProfile, sequenceDepth = 0): void {
 	if (profile.name.trim() === '') {
 		throw(new Error('A profile name is required.'));
 	}
@@ -60,6 +73,17 @@ export function validateProfile(profile: SessionProfile): void {
 			}
 			return;
 		case 'random':
+			return;
+		case 'sequence':
+			if (sequenceDepth >= maximumSequenceDepth) {
+				throw(new Error(`Sequences may nest at most ${maximumSequenceDepth} levels deep.`));
+			}
+			for (const step of profile.steps) {
+				if (step.profileID.trim() === '' || (step.mode !== 'reference' && step.mode !== 'value')) {
+					throw(new Error('Sequence step has an invalid inclusion mode or profile identifier.'));
+				}
+				validateProfile(step.profile, sequenceDepth + 1);
+			}
 			return;
 		case 'ai':
 			return;

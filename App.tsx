@@ -36,8 +36,10 @@ import { brandColors, getAppColors } from './src/ui/colors';
 import type { AppColors } from './src/ui/colors';
 import type { SavedDevice } from './src/core/device-store';
 import type { Journey, JourneyFile, JourneyRating } from './src/core/journey-store';
-import { decapsulateSharedProfile, encapsulateSharedProfile } from './src/core/profile-codec';
-import type { ProfileID, SessionProfile, StoredProfile } from './src/core/profiles';
+import { encapsulateSharedProfile } from './src/core/profile-codec';
+import type { ProfileID, SequenceStep, SessionProfile, StoredProfile } from './src/core/profiles';
+import { maximumSequenceDepth } from './src/core/profiles';
+import { createSequenceStep, resolveSequenceProfile, runnableProfileSteps, sequenceStepHasChanged, sequenceStepProfile } from './src/core/sequences';
 import type { FormValues, FrequencyRangeForm } from './src/core/random-profile-form';
 import { defaultFormValues, getRandomFormValidationErrors, randomFormFromProfile, randomParametersFromProfile, randomProfileFromForm } from './src/core/random-profile-form';
 
@@ -110,11 +112,12 @@ const defaultFileProfileJSON = JSON.stringify({
 }, undefined, 2);
 
 type ProfileEditorValues = {
-	kind: 'file' | 'random';
+	kind: 'file' | 'random' | 'sequence';
 	name: string;
 	fileName: string;
 	fileJSON: string;
 	randomForm: FormValues;
+	steps: SequenceStep[];
 };
 
 function profileFromEditorValues(values: ProfileEditorValues): SessionProfile {
@@ -125,6 +128,9 @@ function profileFromEditorValues(values: ProfileEditorValues): SessionProfile {
 			fileName: values.fileName,
 			fileData: parseFileData(values.fileJSON)
 		});
+	}
+	if (values.kind === 'sequence') {
+		return({ kind: 'sequence', name: values.name, steps: values.steps });
 	}
 	return(randomProfileFromForm(values.name, values.randomForm));
 }
@@ -193,6 +199,8 @@ function profileDescription(profile: SessionProfile): string {
 			return(`Random: ${profile.parameters.duration} minute(s), ${ranges.join(', ')}, Off ${profile.parameters.frequency.offPercentage ?? 0}%${phase === undefined ? '' : `, Phase A ${phase}%`}`);
 		case 'ai':
 			return('Unsupported profile type');
+		case 'sequence':
+			return(`Sequence: ${profile.steps.length} step(s)`);
 	}
 }
 
@@ -378,20 +386,18 @@ export default function App(): React.JSX.Element {
 	}
 
 	function runSavedProfile(profile: StoredProfile): void {
-		if (profile.profile.kind === 'random') {
-			try {
-				randomParametersFromProfile(profile.profile);
-			} catch (error) {
-				setStatus(errorMessage(error));
-				if (BrainlightError.isInstance(error)) {
-					openProfileEditor(profile);
-				}
-				return;
+		try {
+			const resolved = resolveSequenceProfile(profile.profile, profiles);
+			runnableProfileSteps(resolved);
+			void run(resolved, async function (setSessionStatus, onGeneratedFile): Promise<void> {
+				await sessionRunner.runProfile(deviceAddress, resolved, setSessionStatus, onGeneratedFile);
+			});
+		} catch (error) {
+			setStatus(errorMessage(error));
+			if (BrainlightError.isInstance(error) || profile.profile.kind === 'sequence') {
+				openProfileEditor(profile);
 			}
 		}
-		void run(profile.profile, async function (setSessionStatus, onGeneratedFile): Promise<void> {
-			await sessionRunner.runProfile(deviceAddress, profile.profile, setSessionStatus, onGeneratedFile);
-		});
 	}
 
 	async function rateJourney(journey: Journey, rating: JourneyRating): Promise<void> {
@@ -414,7 +420,7 @@ export default function App(): React.JSX.Element {
 		try {
 			await journeyStore.remove(journey.id);
 			await loadJourneys();
-			setStatus(`Deleted journey for ${journey.profile.name}.`);
+			setStatus(`Deleted journal record for ${journey.profile.name}.`);
 		} catch (error) {
 			setStatus(errorMessage(error));
 		}
@@ -468,7 +474,19 @@ export default function App(): React.JSX.Element {
 				name: profile.profile.name,
 				fileName: profile.profile.fileName,
 				fileJSON: JSON.stringify(profile.profile.fileData, undefined, 2),
-				randomForm: defaultFormValues
+				randomForm: defaultFormValues,
+				steps: []
+			});
+			return;
+		}
+		if (profile.profile.kind === 'sequence') {
+			setProfileEditor({
+				kind: 'sequence',
+				name: profile.profile.name,
+				fileName: 'session.vnp0',
+				fileJSON: '{}',
+				randomForm: defaultFormValues,
+				steps: profile.profile.steps
 			});
 			return;
 		}
@@ -477,7 +495,8 @@ export default function App(): React.JSX.Element {
 			name: profile.profile.name,
 			fileName: 'session.vnp0',
 			fileJSON: '{}',
-			randomForm: randomFormFromProfile(profile.profile)
+			randomForm: randomFormFromProfile(profile.profile),
+			steps: []
 		});
 	}
 
@@ -500,16 +519,22 @@ export default function App(): React.JSX.Element {
 				name: 'My file session',
 				fileName: 'tmp1.vnp0',
 				fileJSON: defaultFileProfileJSON,
-				randomForm: defaultFormValues
+				randomForm: defaultFormValues,
+				steps: []
 			});
 			return;
 		}
+		let name = 'My random session';
+		if (kind === 'sequence') {
+			name = 'My sequence';
+		}
 		setProfileEditor({
-			kind: 'random',
-			name: 'My random session',
+			kind: kind,
+			name: name,
 			fileName: 'session.vnp0',
 			fileJSON: '{}',
-			randomForm: defaultFormValues
+			randomForm: defaultFormValues,
+			steps: []
 		});
 	}
 
@@ -564,19 +589,18 @@ export default function App(): React.JSX.Element {
 
 	async function importSharedProfile(): Promise<void> {
 		try {
-			const profile = decapsulateSharedProfile(sharedProfileJSON);
-			await profileStore.save(profile);
+			const imported = await profileStore.importSharedProfile(sharedProfileJSON);
 			await loadProfiles();
 			closeProfileDocumentModal();
-			setStatus(`Imported ${profile.name}.`);
+			setStatus(`Imported ${imported.profile.name}.`);
 		} catch (error) {
 			setStatus(errorMessage(error));
 		}
 	}
 
 	async function shareProfile(profile: StoredProfile): Promise<void> {
-		const serializedProfile = encapsulateSharedProfile(profile.profile);
 		try {
+			const serializedProfile = encapsulateSharedProfile(profile.profile, profiles);
 			if (Platform.OS === 'web') {
 				await Clipboard.setStringAsync(serializedProfile);
 				setStatus(`${profile.profile.name} copied to the clipboard.`);
@@ -640,15 +664,25 @@ export default function App(): React.JSX.Element {
 		if (item.profile.kind === 'random') {
 			validationErrors = getRandomFormValidationErrors(randomFormFromProfile(item.profile));
 		}
+		let sequenceError: string | undefined;
+		if (item.profile.kind === 'sequence') {
+			try {
+				runnableProfileSteps(item.profile, profiles);
+			} catch (error) {
+				sequenceError = errorMessage(error);
+			}
+		}
 		return(
 			<View style={styles.profile}>
 				<View style={styles.profileText}>
 					<Text style={styles.profileName}>{item.profile.name}</Text>
 					<Text style={styles.profileDescription}>{profileDescription(item.profile)}</Text>
 					{validationErrors.length > 0 && <Text style={styles.fieldError}>Cannot run: {validationErrors[0]?.message} Edit the highlighted fields.</Text>}
+					{sequenceError !== undefined && <Text style={styles.fieldError}>Cannot run: {sequenceError}</Text>}
+					{item.profile.kind === 'sequence' && <SequenceSteps steps={item.profile.steps} profiles={profiles} />}
 				</View>
 				<View style={styles.profileButtons}>
-					<Button title="Run" disabled={isRunning || item.profile.kind === 'ai' || validationErrors.length > 0} onPress={function (): void { runSavedProfile(item); }} />
+					<Button title="Run" disabled={isRunning || item.profile.kind === 'ai' || validationErrors.length > 0 || sequenceError !== undefined} onPress={function (): void { runSavedProfile(item); }} />
 					<Button title="View / edit" disabled={isRunning} onPress={function (): void { openProfileEditor(item); }} />
 					<Button title="Share / copy" disabled={isRunning} onPress={function (): void { void shareProfile(item); }} />
 					<Button title="Delete" color="#75113d" disabled={isRunning} onPress={function (): void { void deleteProfile(item); }} />
@@ -756,11 +790,11 @@ export default function App(): React.JSX.Element {
 							{renderEmptyProfiles()}
 						</Section>
 
-						<Section title="Journeys">
+						<Section title="Journal">
 							<Text style={styles.help}>Each session keeps the profile settings it started with, even if that profile is later changed.</Text>
 							{journeys.slice(0, visibleJourneyCount).map(renderJourney)}
-							{journeys.length === 0 ? <Text style={styles.empty}>No journeys yet.</Text> : null}
-							{journeys.length > visibleJourneyCount ? <Button title={`View ${Math.min(10, journeys.length - visibleJourneyCount)} more journeys`} onPress={function (): void { setVisibleJourneyCount(function (count): number { return(count + 10); }); }} /> : null}
+							{journeys.length === 0 ? <Text style={styles.empty}>No journal records yet.</Text> : null}
+							{journeys.length > visibleJourneyCount ? <Button title={`View ${Math.min(10, journeys.length - visibleJourneyCount)} more journal records`} onPress={function (): void { setVisibleJourneyCount(function (count): number { return(count + 10); }); }} /> : null}
 						</Section>
 
 					</ScrollView>
@@ -820,6 +854,8 @@ export default function App(): React.JSX.Element {
 					onClose={closeProfileDocumentModal}
 					onSave={function (): void { void saveNewProfile(); }}
 					saveTitle="Save profile"
+					profiles={profiles}
+					editingProfileID={editingProfileID}
 				/>
 				<ProfileEditorModal
 					title="Edit profile"
@@ -830,6 +866,8 @@ export default function App(): React.JSX.Element {
 					onClose={closeProfileDocumentModal}
 					onSave={function (): void { void saveEditedProfile(); }}
 					saveTitle="Save changes"
+					profiles={profiles}
+					editingProfileID={editingProfileID}
 				/>
 				<ProfileDocumentModal
 					title="Import shared profile"
@@ -934,6 +972,75 @@ function renderFieldHelp(label: string, helpText: string | undefined, isShowingH
 	);
 }
 
+function SequenceSteps(props: {
+	steps: SequenceStep[];
+	profiles: StoredProfile[];
+	onChange?: (steps: SequenceStep[]) => void;
+	depth?: number;
+}): React.JSX.Element {
+	const { styles } = useContext(ThemeContext);
+	const depth = props.depth ?? 1;
+	function move(index: number, offset: number): void {
+		const steps = [...props.steps];
+		const current = steps[index];
+		const other = steps[index + offset];
+		if (current === undefined || other === undefined) {
+			return;
+		}
+		steps[index] = other;
+		steps[index + offset] = current;
+		props.onChange?.(steps);
+	}
+	return(
+		<View style={styles.sequenceSteps}>
+			{props.steps.map(function (step, index): React.JSX.Element {
+				const source = props.profiles.find(function (item): boolean { return(item.id === step.profileID); });
+				let name = step.profile.name;
+				let effectiveProfile = step.profile;
+				if (step.mode === 'reference' && source !== undefined) {
+					name = source.profile.name;
+					if (source.profile.kind !== 'ai') {
+						effectiveProfile = source.profile;
+					}
+				}
+				let suffix = '';
+				if (sequenceStepHasChanged(step, props.profiles)) {
+					suffix = ' \u2022';
+				}
+				return(
+					<View key={index} style={styles.sequenceStep}>
+						<Text style={styles.profileDescription}>{index + 1}. {name}{suffix}</Text>
+						<Text style={styles.help}>By {step.mode}</Text>
+						{effectiveProfile.kind === 'sequence' && depth < maximumSequenceDepth && <View style={styles.sequenceNestedSteps}>
+							<SequenceSteps steps={effectiveProfile.steps} profiles={props.profiles} depth={depth + 1} />
+						</View>}
+						{props.onChange !== undefined && <View style={styles.sequenceStepButtons}>
+							<Button title="Move up" disabled={index === 0} onPress={function (): void { move(index, -1); }} />
+							<Button title="Move down" disabled={index === props.steps.length - 1} onPress={function (): void { move(index, 1); }} />
+							<Button title="Change inclusion" onPress={function (): void {
+								let mode: SequenceStep['mode'] = 'reference';
+								if (step.mode === 'reference') {
+									mode = 'value';
+								}
+								const updated = createSequenceStep({ id: step.profileID, profile: sequenceStepProfile(step, props.profiles) }, mode);
+								props.onChange?.(props.steps.map(function (item, itemIndex): SequenceStep {
+									if (itemIndex === index) {
+										return(updated);
+									}
+									return(item);
+								}));
+							}} />
+							<Button title="Remove step" color="#75113d" onPress={function (): void {
+								props.onChange?.(props.steps.filter(function (_, itemIndex): boolean { return(itemIndex !== index); }));
+							}} />
+						</View>}
+					</View>
+				);
+			})}
+		</View>
+	);
+}
+
 function ProfileEditorModal(props: {
 	title: string;
 	visible: boolean;
@@ -943,8 +1050,20 @@ function ProfileEditorModal(props: {
 	onClose: () => void;
 	onSave: () => void;
 	saveTitle: string;
+	profiles: StoredProfile[];
+	editingProfileID: ProfileID | undefined;
 }): React.JSX.Element {
 	const { styles } = useContext(ThemeContext);
+	const [stepProfileID, setStepProfileID] = useState('');
+	const [stepMode, setStepMode] = useState<SequenceStep['mode']>('reference');
+	const [isShowingCopyHelp, setIsShowingCopyHelp] = useState(false);
+	useEffect(function (): void {
+		if (props.visible) {
+			setStepProfileID('');
+			setStepMode('reference');
+			setIsShowingCopyHelp(false);
+		}
+	}, [props.visible]);
 	let validationErrors: BrainlightError[] = [];
 	if (props.values?.kind === 'random') {
 		validationErrors = getRandomFormValidationErrors(props.values.randomForm);
@@ -978,6 +1097,7 @@ function ProfileEditorModal(props: {
 					<View style={styles.profileTypeChoices}>
 						<Button title="New random profile" onPress={function (): void { props.onSelectKind('random'); }} />
 						<Button title="New file profile" onPress={function (): void { props.onSelectKind('file'); }} />
+						<Button title="New sequence profile" onPress={function (): void { props.onSelectKind('sequence'); }} />
 					</View>
 				</Section>
 			);
@@ -989,6 +1109,58 @@ function ProfileEditorModal(props: {
 					<Field label="Device filename" value={props.values.fileName} onChangeText={function (fileName): void { props.onChangeValues(function (current): ProfileEditorValues { return({ ...current, fileName: fileName }); }); }} autoCapitalize="none" />
 					<Text style={styles.label}>Session JSON</Text>
 					<TextInput multiline value={props.values.fileJSON} onChangeText={function (fileJSON): void { props.onChangeValues(function (current): ProfileEditorValues { return({ ...current, fileJSON: fileJSON }); }); }} style={styles.jsonInput} autoCapitalize="none" />
+				</Section>
+			);
+		}
+		if (props.values.kind === 'sequence') {
+			const eligible = props.profiles.filter(function (item): boolean {
+				return(item.profile.kind !== 'ai' && item.id !== props.editingProfileID);
+			});
+			const selected = eligible.find(function (item): boolean { return(item.id === stepProfileID); });
+			let sequenceError: string | undefined;
+			try {
+				const sequence = profileFromEditorValues(props.values);
+				let candidates = props.profiles;
+				if (props.editingProfileID !== undefined) {
+					candidates = [...props.profiles.filter(function (item): boolean { return(item.id !== props.editingProfileID); }), { id: props.editingProfileID, profile: sequence }];
+				}
+				runnableProfileSteps(sequence, candidates);
+			} catch (error) {
+				sequenceError = errorMessage(error);
+			}
+			return(
+				<Section title="Sequence profile">
+					<Field label="Profile name" value={props.values.name} onChangeText={function (name): void { props.onChangeValues(function (current): ProfileEditorValues { return({ ...current, name: name }); }); }} />
+					<Text style={styles.help}>Steps run in order. References follow edits to saved profiles; values keep independent copies. A dot after a step name means its stored copy differs from the source, or the source is missing. Nesting is limited to 10 sequence levels.</Text>
+					{sequenceError !== undefined && <Text style={styles.fieldError}>Cannot run: {sequenceError}</Text>}
+					<SequenceSteps steps={props.values.steps} profiles={props.profiles} onChange={function (steps): void {
+						props.onChangeValues(function (current): ProfileEditorValues { return({ ...current, steps: steps }); });
+					}} />
+					<Text style={styles.label}>Profile for next step</Text>
+					<Picker accessibilityLabel="Profile for next step" selectedValue={stepProfileID} onValueChange={function (value: string): void { setStepProfileID(value); }} style={styles.picker}>
+						<Picker.Item label="Select a saved profile" value="" />
+						{eligible.map(function (item): React.JSX.Element { return(<Picker.Item key={item.id} label={item.profile.name} value={item.id} />); })}
+					</Picker>
+					<View style={styles.settingRow}>
+						<View style={styles.labelRow}>
+							<Text style={styles.label}>Copy into sequence</Text>
+							{renderFieldHelp('Copy into sequence', 'On: copy the profile into this sequence (by value). Later edits to the saved profile do not change this copy. Off: include the saved profile by reference, so later edits apply to this sequence too. Copying a Sequence preserves any references within its steps.', isShowingCopyHelp, setIsShowingCopyHelp, styles)}
+						</View>
+						<Switch accessibilityLabel="Copy into sequence" value={stepMode === 'value'} onValueChange={function (copy): void {
+							if (copy) {
+								setStepMode('value');
+							} else {
+								setStepMode('reference');
+							}
+						}} />
+					</View>
+					<Button title="Add step" disabled={selected === undefined} onPress={function (): void {
+						if (selected !== undefined) {
+							const step = createSequenceStep(selected, stepMode);
+							props.onChangeValues(function (current): ProfileEditorValues { return({ ...current, steps: [...current.steps, step] }); });
+						}
+					}} />
+					{eligible.length === 0 && <Text style={styles.help}>Save a Random, File, or Sequence profile first.</Text>}
 				</Section>
 			);
 		}
@@ -1077,7 +1249,7 @@ function JourneyJournalModal(props: {
 			<SafeAreaView style={styles.documentModal}>
 				<KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.keyboardAvoidingModal}>
 					<Text style={styles.documentModalTitle}>Journal entry</Text>
-					<Text style={styles.help}>Optionally record how this journey felt. Leave it blank and save to remove an existing entry.</Text>
+					<Text style={styles.help}>Optionally record how this session felt. Leave it blank and save to remove an existing entry.</Text>
 					<TextInput multiline value={props.value} onChangeText={props.onChangeText} style={styles.documentInput} textAlignVertical="top" />
 					<Button title="Save journal entry" onPress={props.onSave} />
 					<Button title="Cancel" color="#75113d" onPress={props.onClose} />
@@ -1099,8 +1271,8 @@ function JourneyParametersModal(props: {
 	return(
 		<Modal animationType="slide" visible={props.journey !== undefined} onRequestClose={props.onClose}>
 			<SafeAreaView style={styles.documentModal}>
-				<Text style={styles.documentModalTitle}>Journey parameters</Text>
-				<Text style={styles.help}>These are the exact profile settings and device files saved when this journey began.</Text>
+				<Text style={styles.documentModalTitle}>Journal record parameters</Text>
+				<Text style={styles.help}>These are the exact profile settings and device files saved when this session began.</Text>
 				<TextInput editable={false} multiline value={serializedProfile} style={styles.documentInput} textAlignVertical="top" />
 				<Button title="Close" onPress={props.onClose} />
 			</SafeAreaView>
@@ -1238,6 +1410,10 @@ function createStyles(colors: AppColors) {
 	documentInput: { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: 8, borderWidth: 1, color: colors.inputText, flex: 1, fontFamily: 'monospace', padding: 12, textAlignVertical: 'top' },
 	editorForm: { gap: 10, paddingBottom: 8 },
 	profileTypeChoices: { gap: 10 },
-	frequencyRange: { borderColor: colors.border, borderRadius: 8, borderWidth: 1, gap: 8, padding: 10 }
+	frequencyRange: { borderColor: colors.border, borderRadius: 8, borderWidth: 1, gap: 8, padding: 10 },
+	sequenceSteps: { gap: 8 },
+	sequenceNestedSteps: { marginLeft: 12 },
+	sequenceStep: { borderColor: colors.border, borderRadius: 8, borderWidth: 1, padding: 10, gap: 5 },
+	sequenceStepButtons: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 }
 	}));
 }

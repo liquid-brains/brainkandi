@@ -1,8 +1,9 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-import { decapsulateProfiles, encapsulateProfiles } from './profile-codec';
+import { decapsulateProfiles, decapsulateSharedProfileDocument, encapsulateProfiles } from './profile-codec';
 import { createProfileID } from './profiles';
 import type { ProfileID, SessionProfile, StoredProfile } from './profiles';
+import { resolveSequenceProfile, sequenceExternalProfiles } from './sequences';
 
 const profilesStorageKey = 'brainkandi.profiles.v1';
 
@@ -10,6 +11,7 @@ export interface ProfileStore {
 	list(): Promise<StoredProfile[]>;
 	save(profile: SessionProfile, profileID?: ProfileID): Promise<StoredProfile>;
 	remove(profileID: ProfileID): Promise<void>;
+	importSharedProfile(serialized: string): Promise<StoredProfile>;
 }
 
 export class AsyncStorageProfileStore implements ProfileStore {
@@ -35,8 +37,28 @@ export class AsyncStorageProfileStore implements ProfileStore {
 		} else {
 			profiles[existingIndex] = storedProfile;
 		}
+		for (const item of profiles) {
+			resolveSequenceProfile(item.profile, profiles);
+		}
 		await AsyncStorage.setItem(profilesStorageKey, encapsulateProfiles(profiles));
 		return(storedProfile);
+	}
+
+	public async importSharedProfile(serialized: string): Promise<StoredProfile> {
+		const document = decapsulateSharedProfileDocument(serialized);
+		const profiles = await this.list();
+		const missing = (document.external ?? []).filter(function (item): boolean {
+			return(!profiles.some(function (existing): boolean { return(existing.id === item.id); }));
+		});
+		const candidates = [...profiles, ...missing];
+		const used = new Set(sequenceExternalProfiles(document.profile, candidates).map(function (item): ProfileID { return(item.id); }));
+		const imported: StoredProfile = { id: createProfileID(), profile: document.profile };
+		const updated = [...profiles, ...missing.filter(function (item): boolean { return(used.has(item.id)); }), imported];
+		for (const item of updated) {
+			resolveSequenceProfile(item.profile, updated);
+		}
+		await AsyncStorage.setItem(profilesStorageKey, encapsulateProfiles(updated));
+		return(imported);
 	}
 
 	public async remove(profileID: ProfileID): Promise<void> {
