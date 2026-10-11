@@ -223,7 +223,6 @@ export default function App(): React.JSX.Element {
 	const [settings, setSettings] = useState<AppSettings>(defaultSettings);
 	const [isLoadingSettings, setIsLoadingSettings] = useState(true);
 	const [isSavingSettings, setIsSavingSettings] = useState(false);
-	const [isMenuOpen, setIsMenuOpen] = useState(false);
 	const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 	const theme = useMemo(function () {
 		const colors = getAppColors(settings.useSystemColors, colorScheme);
@@ -771,7 +770,7 @@ export default function App(): React.JSX.Element {
 			<SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
 				<StatusBar style={statusBarStyle} />
 				<View style={styles.appHeader}>
-					<Pressable accessibilityRole="button" accessibilityLabel="Open menu" accessibilityState={{ expanded: isMenuOpen }} onPress={function (): void { setIsMenuOpen(true); }} style={styles.menuButton}>
+					<Pressable accessibilityRole="button" accessibilityLabel="Open settings" onPress={function (): void { setIsSettingsOpen(true); }} style={styles.menuButton}>
 						<View style={styles.menuLine} /><View style={styles.menuLine} /><View style={styles.menuLine} />
 					</Pressable>
 					<Text style={styles.headerTitle}>Brain Kandi</Text>
@@ -805,16 +804,6 @@ export default function App(): React.JSX.Element {
 
 					</ScrollView>
 				</KeyboardAvoidingView>
-				<Modal transparent visible={isMenuOpen} animationType="fade" onRequestClose={function (): void { setIsMenuOpen(false); }}>
-					<View style={styles.menuOverlay}>
-						<Pressable style={StyleSheet.absoluteFill} accessibilityRole="button" accessibilityLabel="Dismiss menu" onPress={function (): void { setIsMenuOpen(false); }} />
-						<SafeAreaView style={styles.menuPanel}>
-							<Text style={styles.sectionTitle}>Menu</Text>
-							<Button title="Settings" onPress={function (): void { setIsMenuOpen(false); setIsSettingsOpen(true); }} />
-							<Button title="Close menu" onPress={function (): void { setIsMenuOpen(false); }} />
-						</SafeAreaView>
-					</View>
-				</Modal>
 				<Modal visible={isSettingsOpen} animationType="slide" onRequestClose={function (): void { setIsSettingsOpen(false); }}>
 					<SafeAreaView style={styles.documentModal}>
 						<View style={styles.settingsHeader}>
@@ -1383,8 +1372,6 @@ function createStyles(colors: AppColors) {
 	headerTitle: { color: colors.onBackground, fontSize: 20, fontWeight: '700' },
 	menuButton: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center', gap: 5 },
 	menuLine: { width: 24, height: 3, backgroundColor: colors.onBackground, borderRadius: 2 },
-	menuOverlay: { flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.5)' },
-	menuPanel: { backgroundColor: colors.section, padding: 20, gap: 16, width: '80%', maxWidth: 320 },
 	settingsHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
 	settingRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 16 },
 	activeDevice: { color: colors.onBackground },
