@@ -16,6 +16,30 @@ export interface SessionDeviceFactory {
 	connect(deviceAddress: string): SessionDevice;
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+	return(typeof value === 'object' && value !== null && !Array.isArray(value));
+}
+
+export function fixedRandomSessionStatus(parameters: RandomSessionParameters, data: Record<string, unknown>): string {
+	const modules = Array.isArray(data.modules) ? data.modules.filter(isRecord) : [];
+	const details: string[] = [];
+	if (parameters.frequency.perChannel !== true) {
+		const activeModule = modules.find(function (module): boolean {
+			return(module.active === true && typeof module.freq === 'number');
+		});
+		details.push(activeModule === undefined ? 'Frequency: off' : `Frequency: ${activeModule.freq} Hz`);
+	}
+	if (parameters.power.perChannel === false) {
+		const moduleWithPower = modules.find(function (module): boolean {
+			return(typeof module.power === 'number');
+		});
+		if (moduleWithPower !== undefined) {
+			details.push(`Power: ${moduleWithPower.power}`);
+		}
+	}
+	return(details.join('; '));
+}
+
 export class VielightDeviceFactory implements SessionDeviceFactory {
 	public connect(deviceAddress: string): SessionDevice {
 		return(new VielightDevice({ ip: deviceAddress, logger: console }));
@@ -117,6 +141,7 @@ export class SessionRunner {
 	}
 
 	private async runRandom(device: SessionDevice, parameters: RandomSessionParameters, onStatus?: (status: string) => void, onGeneratedFile?: (fileName: string, data: Record<string, unknown>) => void): Promise<void> {
+		const fixedSessionStatuses = new Map<string, string>();
 		const listenerIDs = [
 			device.on('run-random-start', function (event): void {
 				onStatus?.(`Preparing ${event.fileCount} session part(s) to run.`);
@@ -126,10 +151,12 @@ export class SessionRunner {
 			}),
 			device.on('run-randomupload-finish-file', function (event): void {
 				onGeneratedFile?.(event.fileName, event.data);
+				fixedSessionStatuses.set(event.fileName, fixedRandomSessionStatus(parameters, event.data));
 				onStatus?.(`Uploaded session part ${event.fileIndex} of ${event.fileCount}.`);
 			}),
 			device.on('run-random-run-start-file', function (event): void {
-				onStatus?.(`Running session part ${event.fileIndex} of ${event.fileCount}.`);
+				const fixedStatus = fixedSessionStatuses.get(event.fileName);
+				onStatus?.(`Running session part ${event.fileIndex} of ${event.fileCount}.${fixedStatus === undefined || fixedStatus === '' ? '' : ` ${fixedStatus}.`}`);
 			}),
 			device.on('run-random-run-finish-file', function (event): void {
 				onStatus?.(`Finished session part ${event.fileIndex} of ${event.fileCount}.`);

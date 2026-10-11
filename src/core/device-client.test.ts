@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { BrainlightError, VielightDevice } from '@liquid-brains/brainlight/lib/neuropro/index.js';
 
-import { SessionRunner } from './device-client';
+import { fixedRandomSessionStatus, SessionRunner } from './device-client';
 import { decapsulateSharedProfile, encapsulateSharedProfile } from './profile-codec';
 import { defaultFormValues, formValuesFromRandomParameters, randomParametersFromForm, randomProfileFromForm } from './random-profile-form';
 import type { RandomSessionParameters } from './profiles';
@@ -11,6 +11,13 @@ afterEach(function (): void {
 });
 
 describe('random session execution with Off %', function () {
+	it('reports only values fixed for the current session minute', function () {
+		const data = { modules: [{ active: false, freq: null, power: 42 }, { active: true, freq: 18, power: 42 }] };
+
+		expect(fixedRandomSessionStatus({ duration: 5, frequency: { ranges: [{ min: 10 }], perChannel: false }, power: { min: 1, perChannel: false } }, data)).toBe('Frequency: 18 Hz; Power: 42');
+		expect(fixedRandomSessionStatus({ duration: 5, frequency: { ranges: [{ min: 10 }], perChannel: true }, power: { min: 1, perChannel: true } }, data)).toBe('');
+	});
+
 	it('passes edited and shared parameters unchanged to Brainlight', async function () {
 		const parameters: RandomSessionParameters = {
 			basename: 'weighted',
