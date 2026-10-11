@@ -1100,11 +1100,19 @@ function Button({ title, color: requestedColor, disabled = false, onPress, ...pr
 
 function Section({ title, children }: { title: string; children: React.ReactNode }): React.JSX.Element {
 	const { styles, useLiquidGlassButtons } = useContext(ThemeContext);
+	if (!useLiquidGlassButtons) {
+		return(
+			<View key="standard-section" style={styles.section}>
+				<Text style={styles.sectionTitle}>{title}</Text>
+				{children}
+			</View>
+		);
+	}
 	return(
-		<View style={useLiquidGlassButtons ? styles.sectionLift : undefined}>
-			{useLiquidGlassButtons && <View pointerEvents="none" style={styles.sectionDropShadow} />}
-			<View style={useLiquidGlassButtons ? [styles.section, styles.sectionGlass, webLiquidGlassStyle] : styles.section}>
-				{useLiquidGlassButtons && <View pointerEvents="none" style={styles.sectionGlassHighlight} />}
+		<View key="liquid-glass-section" style={styles.sectionLift}>
+			<View pointerEvents="none" style={styles.sectionDropShadow} />
+			<View style={[styles.section, styles.sectionGlass, webLiquidGlassStyle]}>
+				<View pointerEvents="none" style={styles.sectionGlassHighlight} />
 				<Text style={styles.sectionTitle}>{title}</Text>
 				{children}
 			</View>
