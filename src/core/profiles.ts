@@ -30,10 +30,16 @@ export type AIProfile = {
 	name: string;
 };
 
+export type RestProfile = {
+	kind: 'rest';
+	name: string;
+	seconds: number;
+};
+
 export type SequenceStep = {
 	mode: 'reference' | 'value';
 	profileID: ProfileID;
-	profile: FileProfile | RandomProfile | SequenceProfile;
+	profile: FileProfile | RandomProfile | RestProfile | SequenceProfile;
 };
 
 export type SequenceProfile = {
@@ -42,7 +48,7 @@ export type SequenceProfile = {
 	steps: SequenceStep[];
 };
 
-export type SessionProfile = FileProfile | RandomProfile | SequenceProfile | AIProfile;
+export type SessionProfile = FileProfile | RandomProfile | RestProfile | SequenceProfile | AIProfile;
 export const maximumSequenceDepth = 10;
 
 export type ProfileID = string & { readonly ProfileID: unique symbol };
@@ -74,6 +80,11 @@ export function validateProfile(profile: SessionProfile, sequenceDepth = 0): voi
 			}
 			return;
 		case 'random':
+			return;
+		case 'rest':
+			if (!Number.isSafeInteger(profile.seconds) || profile.seconds < 1 || profile.seconds > 86400) {
+				throw(new Error('A rest interval must be a whole number from 1 through 86400 seconds.'));
+			}
 			return;
 		case 'sequence':
 			if (sequenceDepth >= maximumSequenceDepth) {

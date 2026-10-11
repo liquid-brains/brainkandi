@@ -41,7 +41,7 @@ import type { Journey, JourneyFile, JourneyRating } from './src/core/journey-sto
 import { encapsulateSharedProfile } from './src/core/profile-codec';
 import type { ProfileID, SequenceStep, SessionProfile, StoredProfile } from './src/core/profiles';
 import { maximumSequenceDepth } from './src/core/profiles';
-import { createSequenceStep, resolveSequenceProfile, runnableProfileSteps, sequenceStepHasChanged, synchronizeSequenceStep } from './src/core/sequences';
+import { createRestStep, createSequenceStep, resolveSequenceProfile, runnableProfileSteps, sequenceStepHasChanged, synchronizeSequenceStep } from './src/core/sequences';
 import type { FormValues, FrequencyRangeForm } from './src/core/random-profile-form';
 import { defaultFormValues, getRandomFormValidationErrors, randomFormFromProfile, randomParametersFromProfile, randomProfileFromForm } from './src/core/random-profile-form';
 
@@ -273,6 +273,8 @@ function profileDescription(profile: SessionProfile): string {
 			return('Unsupported profile type');
 		case 'sequence':
 			return(`Sequence: ${profile.steps.length} step(s)`);
+		case 'rest':
+			return(`Rest interval: ${profile.seconds} second(s)`);
 	}
 }
 
@@ -587,7 +589,7 @@ export default function App(): React.JSX.Element {
 	}
 
 	function openProfileEditor(profile: StoredProfile): void {
-		if (profile.profile.kind === 'ai') {
+		if (profile.profile.kind === 'ai' || profile.profile.kind === 'rest') {
 			setStatus('This profile type cannot be edited.');
 			return;
 		}
@@ -1158,9 +1160,23 @@ function SequenceSteps(props: {
 	return(
 		<View style={styles.sequenceSteps}>
 			{props.steps.map(function (step, index): React.JSX.Element {
+				if (step.profile.kind === 'rest') {
+					return(
+						<View key={index} style={styles.sequenceStep}>
+							<Text style={styles.profileDescription}>{index + 1}. Rest for {step.profile.seconds} second(s)</Text>
+							{props.onChange !== undefined && <View style={styles.sequenceStepButtons}>
+								<Button title="Move up" disabled={index === 0} onPress={function (): void { move(index, -1); }} />
+								<Button title="Move down" disabled={index === props.steps.length - 1} onPress={function (): void { move(index, 1); }} />
+								<Button title="Remove step" color="#75113d" onPress={function (): void {
+									props.onChange?.(props.steps.filter(function (_, itemIndex): boolean { return(itemIndex !== index); }));
+								}} />
+							</View>}
+						</View>
+					);
+				}
 				const source = props.profiles.find(function (item): boolean { return(item.id === step.profileID); });
 				let name = step.profile.name;
-				let effectiveProfile = step.profile;
+				let effectiveProfile: SessionProfile = step.profile;
 				if (step.mode === 'reference' && source !== undefined) {
 					name = source.profile.name;
 					if (source.profile.kind !== 'ai') {
@@ -1213,9 +1229,13 @@ function ProfileEditorModal(props: {
 }): React.JSX.Element {
 	const { styles } = useContext(ThemeContext);
 	const [stepProfileID, setStepProfileID] = useState('');
+	const [restSeconds, setRestSeconds] = useState('60');
+	const [restError, setRestError] = useState<string | undefined>();
 	useEffect(function (): void {
 		if (props.visible) {
 			setStepProfileID('');
+			setRestSeconds('60');
+			setRestError(undefined);
 		}
 	}, [props.visible]);
 	let validationErrors: BrainlightError[] = [];
@@ -1298,6 +1318,16 @@ function ProfileEditorModal(props: {
 						if (selected !== undefined) {
 							const step = createSequenceStep(selected, 'reference');
 							props.onChangeValues(function (current): ProfileEditorValues { return({ ...current, steps: [...current.steps, step] }); });
+						}
+					}} />
+					<Field label="Rest interval (seconds)" value={restSeconds} onChangeText={function (value): void { setRestSeconds(value); setRestError(undefined); }} keyboardType="numeric" error={restError} helpText="Wait between sequence steps for a whole number of seconds from 1 through 86400." />
+					<Button title="Add rest interval" onPress={function (): void {
+						try {
+							const step = createRestStep(Number(restSeconds));
+							props.onChangeValues(function (current): ProfileEditorValues { return({ ...current, steps: [...current.steps, step] }); });
+							setRestError(undefined);
+						} catch (error) {
+							setRestError(errorMessage(error));
 						}
 					}} />
 					{eligible.length === 0 && <Text style={styles.help}>Save a Random, File, or Sequence profile first.</Text>}

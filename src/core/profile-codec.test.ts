@@ -110,6 +110,20 @@ describe('profile serialization', function () {
 		expect(decapsulateSharedProfile(encapsulateSharedProfile(profile))).toEqual(profile);
 	});
 
+	it('round-trips rest intervals in sequence profiles', function () {
+		const profile: StoredProfile['profile'] = {
+			kind: 'sequence',
+			name: 'Resting',
+			steps: [{
+				mode: 'value',
+				profileID: 'rest_30' as StoredProfile['id'],
+				profile: { kind: 'rest', name: 'Rest for 30 second(s)', seconds: 30 }
+			}]
+		};
+
+		expect(decapsulateSharedProfile(encapsulateSharedProfile(profile))).toEqual(profile);
+	});
+
 	it.each([
 		{ off: false },
 		{ off: 'true' },

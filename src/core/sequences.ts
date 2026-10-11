@@ -1,4 +1,4 @@
-import type { FileProfile, RandomProfile, SequenceStep, SessionProfile, StoredProfile } from './profiles';
+import type { FileProfile, RandomProfile, RestProfile, SequenceStep, SessionProfile, StoredProfile } from './profiles';
 import { maximumSequenceDepth, validateProfile } from './profiles';
 import { randomParametersFromProfile } from './random-profile-form';
 
@@ -11,6 +11,13 @@ export function createSequenceStep(storedProfile: StoredProfile, mode: SequenceS
 		profileID: storedProfile.id,
 		profile: JSON.parse(JSON.stringify(storedProfile.profile)) as SequenceStep['profile']
 	});
+}
+
+export function createRestStep(seconds: number): SequenceStep {
+	if (!Number.isSafeInteger(seconds) || seconds < 1 || seconds > 86400) {
+		throw(new Error('A rest interval must be a whole number from 1 through 86400 seconds.'));
+	}
+	return({ mode: 'value', profileID: `rest_${seconds}` as SequenceStep['profileID'], profile: { kind: 'rest', name: `Rest for ${seconds} second(s)`, seconds: seconds } });
 }
 
 export function sequenceStepProfile(step: SequenceStep, profiles: StoredProfile[]): SequenceStep['profile'] {
@@ -85,10 +92,10 @@ export function resolveSequenceProfile(profile: SessionProfile, profiles: Stored
 	});
 }
 
-export function runnableProfileSteps(profile: SessionProfile, profiles: StoredProfile[] = []): (FileProfile | RandomProfile)[] {
+export function runnableProfileSteps(profile: SessionProfile, profiles: StoredProfile[] = []): (FileProfile | RandomProfile | RestProfile)[] {
 	const resolved = resolveSequenceProfile(profile, profiles);
 	validateProfile(resolved);
-	const steps: (FileProfile | RandomProfile)[] = [];
+	const steps: (FileProfile | RandomProfile | RestProfile)[] = [];
 	function collect(current: SessionProfile): void {
 		switch (current.kind) {
 			case 'sequence':
@@ -104,6 +111,9 @@ export function runnableProfileSteps(profile: SessionProfile, profiles: StoredPr
 				steps.push(current);
 				return;
 			case 'file':
+				steps.push(current);
+				return;
+			case 'rest':
 				steps.push(current);
 				return;
 			case 'ai':

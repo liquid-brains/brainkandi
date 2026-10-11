@@ -1,6 +1,6 @@
 import { VielightDevice } from '@liquid-brains/brainlight/lib/neuropro/index.js';
 
-import type { RandomSessionParameters, SessionProfile, StoredProfile } from './profiles';
+import type { RandomSessionParameters, RestProfile, SessionProfile, StoredProfile } from './profiles';
 import { randomParametersFromProfile } from './random-profile-form';
 import { runnableProfileSteps } from './sequences';
 
@@ -39,7 +39,8 @@ export class SessionRunner {
 				}
 				let setStatus = onStatus;
 				if (profile.kind === 'sequence') {
-					const prefix = `Step ${index + 1} of ${steps.length}: ${step.name}`;
+					const stepName = step.kind === 'rest' ? `Rest for ${step.seconds} second(s)` : step.name;
+					const prefix = `Step ${index + 1} of ${steps.length}: ${stepName}`;
 					onStatus?.(prefix);
 					setStatus = function (status): void { onStatus?.(`${prefix}. ${status}`); };
 				}
@@ -52,6 +53,10 @@ export class SessionRunner {
 						break;
 					case 'random':
 						await this.runRandom(device, randomParametersFromProfile(step), setStatus, onGeneratedFile);
+						break;
+					case 'rest':
+						onStatus?.(`Resting for ${step.seconds} second(s).`);
+						await this.waitForRest(step);
 						break;
 				}
 				if (this.activeSessionSignal().aborted) {
@@ -98,6 +103,17 @@ export class SessionRunner {
 			throw(new Error('No active session exists.'));
 		}
 		return(this.activeAbortController.signal);
+	}
+
+	private async waitForRest(step: RestProfile): Promise<void> {
+		const signal = this.activeSessionSignal();
+		await new Promise<void>(function (resolve, reject): void {
+			const timeoutID = setTimeout(resolve, step.seconds * 1000);
+			signal.addEventListener('abort', function (): void {
+				clearTimeout(timeoutID);
+				reject(new Error('Session stopped.'));
+			}, { once: true });
+		});
 	}
 
 	private async runRandom(device: SessionDevice, parameters: RandomSessionParameters, onStatus?: (status: string) => void, onGeneratedFile?: (fileName: string, data: Record<string, unknown>) => void): Promise<void> {

@@ -239,6 +239,12 @@ function decodeProfile(value: unknown, allowLegacyRandomParameters: boolean, seq
 		}
 		return({ kind: 'random', name: value.name, ...advanced, parameters: decodeRandomParameters(value.parameters, allowLegacyRandomParameters) });
 	}
+	if (value.kind === 'rest') {
+		if (typeof value.seconds !== 'number' || !Number.isSafeInteger(value.seconds) || value.seconds < 1 || value.seconds > 86400) {
+			throw(new Error('Rest interval has an invalid duration.'));
+		}
+		return({ kind: 'rest', name: value.name, seconds: value.seconds });
+	}
 	if (value.kind === 'ai') {
 		return({ kind: 'ai', name: value.name });
 	}

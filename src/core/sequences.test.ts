@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { createSequenceStep, resolveSequenceProfile, runnableProfileSteps, sequenceExternalProfiles, sequenceStepHasChanged, synchronizeSequenceStep } from './sequences';
+import { createRestStep, createSequenceStep, resolveSequenceProfile, runnableProfileSteps, sequenceExternalProfiles, sequenceStepHasChanged, synchronizeSequenceStep } from './sequences';
 import { decapsulateSharedProfile, encapsulateProfiles, encapsulateSharedProfile } from './profile-codec';
 import { validateProfile } from './profiles';
 import type { FileProfile, ProfileID, SequenceProfile, StoredProfile } from './profiles';
@@ -17,6 +17,14 @@ function nestedSequence(depth: number): SequenceProfile {
 }
 
 describe('sequence profiles', function () {
+	it('preserves rest intervals in runnable sequence order', function () {
+		const rest = createRestStep(60);
+		const sequence: SequenceProfile = { kind: 'sequence', name: 'Resting', steps: [createSequenceStep(source, 'reference'), rest, createSequenceStep(source, 'reference')] };
+
+		expect(runnableProfileSteps(sequence, [source])).toEqual([file, rest.profile, file]);
+		expect(function (): void { createRestStep(0); }).toThrow('1 through 86400');
+	});
+
 	it('stores independent step snapshots for both inclusion modes', function () {
 		const original: StoredProfile = JSON.parse(JSON.stringify(source));
 		const reference = createSequenceStep(original, 'reference');
