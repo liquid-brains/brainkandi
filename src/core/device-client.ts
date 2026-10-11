@@ -1,6 +1,8 @@
 import { VielightDevice } from '@liquid-brains/brainlight/lib/neuropro/index.js';
 
-import type { RandomSessionParameters, SessionProfile } from './profiles';
+import type { RandomSessionParameters, SessionProfile, StoredProfile } from './profiles';
+import { randomParametersFromProfile } from './random-profile-form';
+import { runnableProfileSteps } from './sequences';
 
 export interface SessionDevice {
 	runFileFromData: VielightDevice['runFileFromData'];
@@ -26,19 +28,35 @@ export class SessionRunner {
 
 	public constructor(private readonly deviceFactory: SessionDeviceFactory) {}
 
-	public async runProfile(deviceAddress: string, profile: SessionProfile, onStatus?: (status: string) => void, onGeneratedFile?: (fileName: string, data: Record<string, unknown>) => void): Promise<void> {
+	public async runProfile(deviceAddress: string, profile: SessionProfile, onStatus?: (status: string) => void, onGeneratedFile?: (fileName: string, data: Record<string, unknown>) => void, profiles: StoredProfile[] = []): Promise<void> {
+		const steps = runnableProfileSteps(profile, profiles);
 		const device = this.deviceFactory.connect(deviceAddress);
 		this.beginSession(device);
 		try {
-			switch (profile.kind) {
-				case 'file':
-					await device.runFileFromData(profile.fileName, profile.fileData, { signal: this.activeSessionSignal() });
-					return;
-				case 'random':
-					await this.runRandom(device, profile.parameters, onStatus, onGeneratedFile);
-					return;
-				case 'ai':
-					throw(new Error('This profile type is not supported.'));
+			for (const [index, step] of steps.entries()) {
+				if (this.activeSessionSignal().aborted) {
+					throw(new Error('Session stopped.'));
+				}
+				let setStatus = onStatus;
+				if (profile.kind === 'sequence') {
+					const prefix = `Step ${index + 1} of ${steps.length}: ${step.name}`;
+					onStatus?.(prefix);
+					setStatus = function (status): void { onStatus?.(`${prefix}. ${status}`); };
+				}
+				switch (step.kind) {
+					case 'file':
+						if (profile.kind === 'sequence') {
+							onGeneratedFile?.(step.fileName, step.fileData);
+						}
+						await device.runFileFromData(step.fileName, step.fileData, { signal: this.activeSessionSignal() });
+						break;
+					case 'random':
+						await this.runRandom(device, randomParametersFromProfile(step), setStatus, onGeneratedFile);
+						break;
+				}
+				if (this.activeSessionSignal().aborted) {
+					throw(new Error('Session stopped.'));
+				}
 			}
 		} finally {
 			this.endSession(device);
@@ -46,6 +64,7 @@ export class SessionRunner {
 	}
 
 	public async runExperiment(deviceAddress: string, parameters: RandomSessionParameters, onStatus?: (status: string) => void): Promise<void> {
+		VielightDevice.validateRandomParams(parameters);
 		const device = this.deviceFactory.connect(deviceAddress);
 		this.beginSession(device);
 		try {

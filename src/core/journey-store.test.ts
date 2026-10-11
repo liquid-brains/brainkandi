@@ -33,4 +33,42 @@ describe('journey serialization', function () {
 		}).toThrow('invalid outcome');
 	});
 
+	it('retains Off % and Phase A probability in journey snapshots', function () {
+		const journeys: Journey[] = [{
+			id: 'weighted-journey',
+			profile: {
+				kind: 'random',
+				name: 'Weighted snapshot',
+				parameters: {
+					duration: 5,
+					frequency: { ranges: [{ min: 10, max: 20 }], offPercentage: 40, perChannel: true },
+					abCoupling: { distribution: 75 },
+					power: { min: 1 }
+				}
+			},
+			startedAt: '2026-10-10T22:00:00.000Z',
+			outcome: 'completed',
+			files: []
+		}];
+
+		expect(decapsulateJourneys(encapsulateJourneys(journeys))).toEqual(journeys);
+	});
+
+	it('keeps old journey snapshots with off frequency entries readable', function () {
+		const decoded = decapsulateJourneys(JSON.stringify({
+			version: 1,
+			journeys: [{
+				id: 'old-off',
+				profile: {
+					kind: 'random',
+					name: 'Old off',
+					parameters: { duration: 5, frequency: { ranges: [{ min: 10, weight: 75 }, { off: true, weight: 25 }] }, power: { min: 1 } }
+				},
+				startedAt: '2026-10-10T22:00:00.000Z',
+				outcome: 'completed',
+				files: []
+			}]
+		}))[0]?.profile;
+		expect(decoded).toMatchObject({ kind: 'random', parameters: { frequency: { ranges: [{ min: 10, weight: 75 }], offPercentage: 25 } } });
+	});
 });
