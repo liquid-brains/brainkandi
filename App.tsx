@@ -832,7 +832,7 @@ export default function App(): React.JSX.Element {
 									<Text style={styles.help}>Follow the system light or dark appearance instead of Brain Kandi colors.</Text>
 								</Section>
 								<Section title="Devices">
-									<Text style={styles.label}>Previously used device</Text>
+									<Text style={styles.label}>IP address of Neuro Pro 2</Text>
 									<Picker enabled={!isRunning} accessibilityLabel="Previously used device" selectedValue={selectedDevicePickerValue()} onValueChange={function (address: string): void {
 										if (address === addDevicePickerValue) {
 											setIsAddingDevice(true);
