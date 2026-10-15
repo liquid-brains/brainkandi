@@ -9,6 +9,7 @@ export type CouplingParameters = NonNullable<RandomSessionParameters['coupling']
 export type FileProfile = {
 	kind: 'file';
 	name: string;
+	description?: string;
 	fileName: string;
 	fileData: Record<string, unknown>;
 };
@@ -16,6 +17,7 @@ export type FileProfile = {
 export type RandomProfile = {
 	kind: 'random';
 	name: string;
+	description?: string;
 	advanced?: boolean;
 } & ({
 	parameters: RandomSessionParameters;
@@ -28,11 +30,13 @@ export type RandomProfile = {
 export type AIProfile = {
 	kind: 'ai';
 	name: string;
+	description?: string;
 };
 
 export type RestProfile = {
 	kind: 'rest';
 	name: string;
+	description?: string;
 	seconds: number;
 };
 
@@ -45,6 +49,7 @@ export type SequenceStep = {
 export type SequenceProfile = {
 	kind: 'sequence';
 	name: string;
+	description?: string;
 	steps: SequenceStep[];
 };
 

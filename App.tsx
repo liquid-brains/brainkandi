@@ -189,6 +189,7 @@ const defaultFileProfileJSON = JSON.stringify({
 type ProfileEditorValues = {
 	kind: 'file' | 'random' | 'sequence';
 	name: string;
+	description: string;
 	fileName: string;
 	fileJSON: string;
 	randomForm: FormValues;
@@ -206,18 +207,20 @@ const journalSortOptions: { label: string; value: JournalSort }[] = [
 ];
 
 function profileFromEditorValues(values: ProfileEditorValues): SessionProfile {
+	const description = values.description.trim() === '' ? {} : { description: values.description.trim() };
 	if (values.kind === 'file') {
 		return({
 			kind: 'file',
 			name: values.name,
+			...description,
 			fileName: values.fileName,
 			fileData: parseFileData(values.fileJSON)
 		});
 	}
 	if (values.kind === 'sequence') {
-		return({ kind: 'sequence', name: values.name, steps: values.steps });
+		return({ kind: 'sequence', name: values.name, ...description, steps: values.steps });
 	}
-	return(randomProfileFromForm(values.name, values.randomForm, values.advanced));
+	return({ ...randomProfileFromForm(values.name, values.randomForm, values.advanced), ...description });
 }
 
 function initialJourneyFiles(profile: SessionProfile): JourneyFile[] {
@@ -618,6 +621,7 @@ export default function App(): React.JSX.Element {
 			setProfileEditor({
 				kind: 'file',
 				name: profile.profile.name,
+				description: profile.profile.description ?? '',
 				fileName: profile.profile.fileName,
 				fileJSON: JSON.stringify(profile.profile.fileData, undefined, 2),
 				randomForm: defaultFormValues,
@@ -630,6 +634,7 @@ export default function App(): React.JSX.Element {
 			setProfileEditor({
 				kind: 'sequence',
 				name: profile.profile.name,
+				description: profile.profile.description ?? '',
 				fileName: 'session.vnp0',
 				fileJSON: '{}',
 				randomForm: defaultFormValues,
@@ -641,6 +646,7 @@ export default function App(): React.JSX.Element {
 		setProfileEditor({
 			kind: 'random',
 			name: profile.profile.name,
+			description: profile.profile.description ?? '',
 			fileName: 'session.vnp0',
 			fileJSON: '{}',
 			randomForm: randomFormFromProfile(profile.profile),
@@ -660,6 +666,7 @@ export default function App(): React.JSX.Element {
 			setProfileEditor({
 				kind: 'file',
 				name: 'My file session',
+				description: '',
 				fileName: 'tmp1.vnp0',
 				fileJSON: defaultFileProfileJSON,
 				randomForm: defaultFormValues,
@@ -675,6 +682,7 @@ export default function App(): React.JSX.Element {
 		setProfileEditor({
 			kind: kind,
 			name: name,
+			description: '',
 			fileName: 'session.vnp0',
 			fileJSON: '{}',
 			randomForm: defaultFormValues,
@@ -835,6 +843,7 @@ export default function App(): React.JSX.Element {
 				<View style={styles.profileText}>
 					<Text style={styles.profileName}>{item.profile.name}</Text>
 					<Text style={styles.profileDescription}>{profileDescription(item.profile)}</Text>
+					{item.profile.description === undefined ? null : <Text style={styles.profileDescription}>{item.profile.description}</Text>}
 					{validationErrors.length > 0 && <Text style={styles.fieldError}>Cannot run: {validationErrors[0]?.message} Edit the highlighted fields.</Text>}
 					{sequenceError !== undefined && <Text style={styles.fieldError}>Cannot run: {sequenceError}</Text>}
 					{item.profile.kind === 'sequence' && <SequenceSteps steps={item.profile.steps} profiles={profiles} />}
@@ -855,6 +864,7 @@ export default function App(): React.JSX.Element {
 				<View style={styles.profileText}>
 					<Text style={styles.profileName}>{journey.profile.name}</Text>
 					<Text style={styles.profileDescription}>{profileDescription(journey.profile)}</Text>
+					{journey.profile.description === undefined ? null : <Text style={styles.profileDescription}>{journey.profile.description}</Text>}
 					<Text style={styles.profileDescription}>{journeyDescription(journey)}</Text>
 					<Text style={styles.profileDescription}>{journey.files.length} file(s) recorded.</Text>
 					{journey.journalEntry === undefined ? null : <Text style={styles.journalEntry}>{journey.journalEntry}</Text>}
@@ -1118,6 +1128,7 @@ function Field(props: {
 	onChangeText: (value: string) => void;
 	keyboardType?: 'default' | 'numeric';
 	autoCapitalize?: 'none';
+	multiline?: boolean;
 	helpText?: string;
 	error?: string | undefined;
 }): React.JSX.Element {
@@ -1135,7 +1146,9 @@ function Field(props: {
 				onChangeText={props.onChangeText}
 				keyboardType={props.keyboardType}
 				autoCapitalize={props.autoCapitalize}
-				style={[styles.input, props.error !== undefined && styles.invalidInput]}
+				multiline={props.multiline}
+				textAlignVertical={props.multiline ? 'top' : undefined}
+				style={[styles.input, props.multiline && styles.multilineInput, props.error !== undefined && styles.invalidInput]}
 				accessibilityLabel={props.label}
 				accessibilityHint={props.error}
 			/>
@@ -1297,6 +1310,19 @@ function ProfileEditorModal(props: {
 		});
 	}
 
+	function renderDescriptionField(): React.ReactNode {
+		return(
+			<Field
+				label="Description (optional)"
+				value={props.values?.description ?? ''}
+				onChangeText={function (description): void {
+					props.onChangeValues(function (current): ProfileEditorValues { return({ ...current, description: description }); });
+				}}
+				multiline
+			/>
+		);
+	}
+
 	function renderEditorFields(): React.ReactNode {
 		if (props.values === undefined) {
 			return(
@@ -1313,6 +1339,7 @@ function ProfileEditorModal(props: {
 			return(
 				<Section title="File profile">
 					<Field label="Profile name" value={props.values.name} onChangeText={function (name): void { props.onChangeValues(function (current): ProfileEditorValues { return({ ...current, name: name }); }); }} />
+					{renderDescriptionField()}
 					<Field label="Device filename" value={props.values.fileName} onChangeText={function (fileName): void { props.onChangeValues(function (current): ProfileEditorValues { return({ ...current, fileName: fileName }); }); }} autoCapitalize="none" />
 					<Text style={styles.label}>Session JSON</Text>
 					<TextInput multiline value={props.values.fileJSON} onChangeText={function (fileJSON): void { props.onChangeValues(function (current): ProfileEditorValues { return({ ...current, fileJSON: fileJSON }); }); }} style={styles.jsonInput} autoCapitalize="none" />
@@ -1338,6 +1365,7 @@ function ProfileEditorModal(props: {
 			return(
 				<Section title="Sequence">
 					<Field label="Sequence name" value={props.values.name} onChangeText={function (name): void { props.onChangeValues(function (current): ProfileEditorValues { return({ ...current, name: name }); }); }} />
+					{renderDescriptionField()}
 					<Text style={styles.help}>New steps run in order and refer to saved profiles. A dot after a step name means its stored copy differs from the source, or the source is missing. Use Update step to refresh an available source into the sequence. Nesting is limited to 10 sequence levels.</Text>
 					{sequenceError !== undefined && <Text style={styles.fieldError}>Cannot run: {sequenceError}</Text>}
 					<SequenceSteps steps={props.values.steps} profiles={props.profiles} onChange={function (steps): void {
@@ -1371,6 +1399,7 @@ function ProfileEditorModal(props: {
 		return(
 			<Section title="Random profile">
 				<Field label="Profile name" value={props.values.name} onChangeText={function (name): void { props.onChangeValues(function (current): ProfileEditorValues { return({ ...current, name: name }); }); }} />
+				{renderDescriptionField()}
 				<View style={styles.settingRow}>
 					<Text style={styles.label}>Profile fields: {props.values.advanced ? 'Advanced' : 'Basic'}</Text>
 					<Switch accessibilityLabel="Advanced random profile fields" value={props.values.advanced} onValueChange={function (advanced): void {
@@ -1584,6 +1613,7 @@ function createStyles(colors: AppColors) {
 	labelRow: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between' },
 	label: { color: colors.text, flexShrink: 1, fontWeight: '600' },
 	input: { backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1, borderRadius: 8, color: colors.inputText, minHeight: 42, paddingHorizontal: 10 },
+	multilineInput: { minHeight: 84, paddingVertical: 10 },
 	invalidInput: { backgroundColor: colors.errorSurface, borderColor: colors.error, borderWidth: 2 },
 	fieldError: { color: colors.error, fontWeight: '600' },
 	picker: { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: 8, borderWidth: 1, color: colors.inputText },
