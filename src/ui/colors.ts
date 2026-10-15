@@ -6,6 +6,7 @@ export const brandColors = {
 	title: '#75113d',
 	inputText: '#280016',
 	onBackground: '#fff',
+	sectionBorder: 'transparent',
 	border: '#bd2b72',
 	helpSurface: '#fff0f8',
 	error: '#b00020',
@@ -30,6 +31,7 @@ export function getAppColors(useSystemColors: boolean, colorScheme: 'light' | 'd
 			title: '#fff',
 			inputText: '#fff',
 			onBackground: '#fff',
+			sectionBorder: '#636366',
 			border: '#636366',
 			helpSurface: '#2c2c2e',
 			error: '#ff8a80',
@@ -40,13 +42,14 @@ export function getAppColors(useSystemColors: boolean, colorScheme: 'light' | 'd
 		});
 	}
 	return({
-		background: '#f2f2f7',
+		background: '#d1d1d6',
 		section: '#fff',
 		surface: '#fff',
 		text: '#1c1c1e',
 		title: '#000',
 		inputText: '#000',
 		onBackground: '#1c1c1e',
+		sectionBorder: '#6b6b71',
 		border: '#8e8e93',
 		helpSurface: '#fff',
 		error: '#b00020',

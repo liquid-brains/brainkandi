@@ -1573,7 +1573,7 @@ function createStyles(colors: AppColors) {
 	list: { paddingBottom: 36 },
 	logo: { alignSelf: 'center', height: 190, width: 240 },
 	status: { color: colors.onBackground, fontSize: 16, fontWeight: '600' },
-	section: { backgroundColor: colors.section, borderRadius: 14, gap: 10, overflow: 'hidden', padding: 16, position: 'relative' },
+	section: { backgroundColor: colors.section, borderColor: colors.sectionBorder, borderRadius: 14, borderWidth: colors.sectionBorder === 'transparent' ? 0 : 1, gap: 10, overflow: 'hidden', padding: 16, position: 'relative' },
 	sectionLift: { padding: 4, paddingBottom: 8, position: 'relative', transform: [{ translateY: -2 }] },
 	sectionDropShadow: { backgroundColor: 'rgba(77, 20, 48, 0.42)', borderRadius: 18, bottom: 8, left: 4, position: 'absolute', right: 0, top: 0 },
 	sectionGlass: { borderColor: 'rgba(255, 255, 255, 0.72)', borderWidth: 1, elevation: 4 },
