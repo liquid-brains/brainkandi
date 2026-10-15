@@ -43,4 +43,10 @@ describe('app colors', function () {
 			expect(contrastRatio(color, light.surface)).toBeGreaterThanOrEqual(4.5);
 		}
 	});
+
+	it('visibly separates system light sections from the page background', function () {
+		const light = getAppColors(true, 'light');
+		expect(contrastRatio(light.sectionBorder, light.background)).toBeGreaterThanOrEqual(3);
+		expect(contrastRatio(light.sectionBorder, light.section)).toBeGreaterThanOrEqual(3);
+	});
 });
