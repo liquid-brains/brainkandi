@@ -29,7 +29,6 @@ import * as SystemUI from 'expo-system-ui';
 import { SessionRunner, VielightDeviceFactory } from './src/core/device-client';
 import { BrainlightError } from '@liquid-brains/brainlight/lib/neuropro/index.js';
 import type { RandomSessionField } from '@liquid-brains/brainlight/lib/neuropro/index.js';
-import { scanLocalSubnet } from './src/core/device-scanner';
 import { AsyncStorageDeviceStore } from './src/core/device-store';
 import { AsyncStorageProfileStore } from './src/core/profile-store';
 import { AsyncStorageJourneyStore, createJourneyID } from './src/core/journey-store';
@@ -343,8 +342,6 @@ export default function App(): React.JSX.Element {
 	const [deviceAddress, setDeviceAddress] = useState('np1.local');
 	const [savedDevices, setSavedDevices] = useState<SavedDevice[]>([]);
 	const [newDeviceAddress, setNewDeviceAddress] = useState('np1.local');
-	const [subnetPrefix, setSubnetPrefix] = useState('192.168.1');
-	const [scannedAddresses, setScannedAddresses] = useState<string[]>([]);
 	const [isAddingDevice, setIsAddingDevice] = useState(false);
 	const [profiles, setProfiles] = useState<StoredProfile[]>([]);
 	const [journeys, setJourneys] = useState<Journey[]>([]);
@@ -806,23 +803,7 @@ export default function App(): React.JSX.Element {
 				setDeviceAddress(history.lastUsedAddress);
 			}
 			setIsAddingDevice(false);
-			setScannedAddresses([]);
 			setStatus(`Added ${address.trim()} and selected it.`);
-		} catch (error) {
-			setStatus(errorMessage(error));
-		}
-	}
-
-	async function scanDevices(): Promise<void> {
-		try {
-			setStatus(`Scanning ${subnetPrefix.trim()}.0/24 for responsive devices...`);
-			const addresses = await scanLocalSubnet(subnetPrefix);
-			setScannedAddresses(addresses);
-			if (addresses.length === 0) {
-				setStatus('No responsive addresses were found.');
-				return;
-			}
-			setStatus(`Found ${addresses.length} responsive address(es). Select one to add it.`);
 		} catch (error) {
 			setStatus(errorMessage(error));
 		}
@@ -889,16 +870,6 @@ export default function App(): React.JSX.Element {
 			<View style={styles.addDevice}>
 				<Field label="New device address" value={newDeviceAddress} onChangeText={setNewDeviceAddress} autoCapitalize="none" />
 				<Button title="Add and select device" disabled={isRunning} onPress={function (): void { void addDevice(); }} />
-				<Field label="Subnet to scan (first three IPv4 parts)" value={subnetPrefix} onChangeText={setSubnetPrefix} autoCapitalize="none" />
-				<Button title="Scan local subnet" disabled={isRunning} onPress={function (): void { void scanDevices(); }} />
-				{scannedAddresses.map(function (address): React.JSX.Element {
-					return(
-						<View key={address} style={styles.scannedDevice}>
-							<Text style={styles.profileDescription}>{address}</Text>
-							<Button title="Add and select" disabled={isRunning} onPress={function (): void { setNewDeviceAddress(address); void addDeviceAtAddress(address); }} />
-						</View>
-					);
-				})}
 			</View>
 		);
 	}
@@ -1641,7 +1612,6 @@ function createStyles(colors: AppColors) {
 	ratingButtonDisabled: { opacity: 0.4 },
 	ratingThumbs: { color: '#fff', fontSize: 20, letterSpacing: -10 },
 	addDevice: { gap: 10 },
-	scannedDevice: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between' },
 	helpOverlay: { alignItems: 'center', backgroundColor: 'rgba(0, 0, 0, 0.5)', flex: 1, justifyContent: 'center', padding: 24 },
 	helpDialog: { backgroundColor: colors.helpSurface, borderRadius: 14, gap: 16, maxWidth: 480, padding: 22, width: '100%' },
 	helpTitle: { color: colors.title, fontSize: 22, fontWeight: '700' },
