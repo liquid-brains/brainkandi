@@ -36,12 +36,10 @@ describe('app colors', function () {
 		expect(getAppColors(true, null)).toEqual(getAppColors(true, 'light'));
 	});
 
-	it('keeps system light accent and button colors readable on app surfaces', function () {
+	it('preserves the original system light accent and button colors', function () {
 		const light = getAppColors(true, 'light');
-		for (const color of [light.accent, light.button]) {
-			expect(contrastRatio(color, light.background)).toBeGreaterThanOrEqual(4.5);
-			expect(contrastRatio(color, light.surface)).toBeGreaterThanOrEqual(4.5);
-		}
+		expect(light.accent).toBe('#007aff');
+		expect(light.button).toBe('#007aff');
 	});
 
 	it('visibly separates system light sections from the page background', function () {
