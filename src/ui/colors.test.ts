@@ -4,8 +4,9 @@ import { brandColors, getAppColors } from './colors';
 
 function contrastRatio(first: string, second: string): number {
 	function luminance(color: string): number {
+		const normalizedColor = color.length === 4 ? `#${color.slice(1).split('').map(function (channel): string { return(channel + channel); }).join('')}` : color;
 		const channels = [1, 3, 5].map(function (index): number {
-			const channel = Number.parseInt(color.slice(index, index + 2), 16) / 255;
+			const channel = Number.parseInt(normalizedColor.slice(index, index + 2), 16) / 255;
 			return(channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4);
 		});
 		return(0.2126 * channels[0]! + 0.7152 * channels[1]! + 0.0722 * channels[2]!);
