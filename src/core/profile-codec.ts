@@ -168,11 +168,15 @@ function decodeProfile(value: unknown, allowLegacyRandomParameters: boolean, seq
 	if (!isRecord(value) || typeof value.name !== 'string' || typeof value.kind !== 'string') {
 		throw(new Error('Profile has an invalid format.'));
 	}
+	if (value.description !== undefined && typeof value.description !== 'string') {
+		throw(new Error('Profile description is invalid.'));
+	}
+	const description = value.description === undefined ? {} : { description: value.description };
 	if (value.kind === 'file') {
 		if (typeof value.fileName !== 'string' || !isRecord(value.fileData)) {
 			throw(new Error('File profile has an invalid format.'));
 		}
-		return({ kind: 'file', name: value.name, fileName: value.fileName, fileData: value.fileData });
+		return({ kind: 'file', name: value.name, ...description, fileName: value.fileName, fileData: value.fileData });
 	}
 	if (value.kind === 'sequence') {
 		if (sequenceDepth >= maximumSequenceDepth) {
@@ -191,7 +195,7 @@ function decodeProfile(value: unknown, allowLegacyRandomParameters: boolean, seq
 			}
 			return({ mode: step.mode, profileID: step.profileID as StoredProfile['id'], profile: profile });
 		});
-		return({ kind: 'sequence', name: value.name, steps: steps });
+		return({ kind: 'sequence', name: value.name, ...description, steps: steps });
 	}
 	if (value.kind === 'random') {
 		if (value.advanced !== undefined && typeof value.advanced !== 'boolean') {
@@ -235,18 +239,18 @@ function decodeProfile(value: unknown, allowLegacyRandomParameters: boolean, seq
 			if ('parameters' in value || !isRandomFormValues(input)) {
 				throw(new Error('Random profile draft input is invalid.'));
 			}
-			return({ kind: 'random', name: value.name, ...advanced, input: input });
+			return({ kind: 'random', name: value.name, ...description, ...advanced, input: input });
 		}
-		return({ kind: 'random', name: value.name, ...advanced, parameters: decodeRandomParameters(value.parameters, allowLegacyRandomParameters) });
+		return({ kind: 'random', name: value.name, ...description, ...advanced, parameters: decodeRandomParameters(value.parameters, allowLegacyRandomParameters) });
 	}
 	if (value.kind === 'rest') {
 		if (typeof value.seconds !== 'number' || !Number.isSafeInteger(value.seconds) || value.seconds < 1 || value.seconds > 86400) {
 			throw(new Error('Rest interval has an invalid duration.'));
 		}
-		return({ kind: 'rest', name: value.name, seconds: value.seconds });
+		return({ kind: 'rest', name: value.name, ...description, seconds: value.seconds });
 	}
 	if (value.kind === 'ai') {
-		return({ kind: 'ai', name: value.name });
+		return({ kind: 'ai', name: value.name, ...description });
 	}
 	throw(new Error('Profile kind is not supported.'));
 }

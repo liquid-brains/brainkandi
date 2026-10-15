@@ -34,10 +34,20 @@ describe('profile serialization', function () {
 		const profile: StoredProfile['profile'] = {
 			kind: 'random',
 			name: 'Shared session',
+			description: 'A calming session for evenings.',
 			parameters: { duration: 20, frequency: { ranges: [{ min: 10 }] }, power: { min: 1 } }
 		};
 
 		expect(decapsulateSharedProfile(encapsulateSharedProfile(profile))).toEqual(profile);
+	});
+
+	it('rejects profiles with non-string descriptions', function () {
+		expect(function (): void {
+			decapsulateSharedProfile(JSON.stringify({
+				version: 1,
+				profile: { kind: 'random', name: 'Invalid', description: 42, input: defaultFormValues }
+			}));
+		}).toThrow('description is invalid');
 	});
 
 	it('transforms legacy locally saved random profiles to the current structure', function () {
