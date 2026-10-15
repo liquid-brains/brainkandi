@@ -2,6 +2,19 @@ import { describe, expect, it } from 'vitest';
 
 import { brandColors, getAppColors } from './colors';
 
+function contrastRatio(first: string, second: string): number {
+	function luminance(color: string): number {
+		const channels = [1, 3, 5].map(function (index): number {
+			const channel = Number.parseInt(color.slice(index, index + 2), 16) / 255;
+			return(channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4);
+		});
+		return(0.2126 * channels[0]! + 0.7152 * channels[1]! + 0.0722 * channels[2]!);
+	}
+	const firstLuminance = luminance(first);
+	const secondLuminance = luminance(second);
+	return((Math.max(firstLuminance, secondLuminance) + 0.05) / (Math.min(firstLuminance, secondLuminance) + 0.05));
+}
+
 describe('app colors', function () {
 	it.each(['light', 'dark', 'unspecified', null, undefined] as const)('keeps Brain Kandi colors when the toggle is off, with system scheme %s', function (scheme) {
 		expect(getAppColors(false, scheme)).toBe(brandColors);
@@ -20,5 +33,13 @@ describe('app colors', function () {
 	it('uses a light palette when the system has no specified scheme', function () {
 		expect(getAppColors(true, 'unspecified')).toEqual(getAppColors(true, 'light'));
 		expect(getAppColors(true, null)).toEqual(getAppColors(true, 'light'));
+	});
+
+	it('keeps system light accent and button colors readable on app surfaces', function () {
+		const light = getAppColors(true, 'light');
+		for (const color of [light.accent, light.button]) {
+			expect(contrastRatio(color, light.background)).toBeGreaterThanOrEqual(4.5);
+			expect(contrastRatio(color, light.surface)).toBeGreaterThanOrEqual(4.5);
+		}
 	});
 });

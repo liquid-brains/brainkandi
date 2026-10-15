@@ -51,8 +51,8 @@ export function getAppColors(useSystemColors: boolean, colorScheme: 'light' | 'd
 		helpSurface: '#fff',
 		error: '#b00020',
 		errorSurface: '#fff0f0',
-		accent: '#007aff',
-		button: '#007aff',
+		accent: '#0056b3',
+		button: '#0056b3',
 		destructive: '#b00020'
 	});
 }
