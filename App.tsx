@@ -930,7 +930,6 @@ export default function App(): React.JSX.Element {
 						{renderStopSessionButton()}
 
 						<Section title="Saved profiles">
-							<Text style={styles.help}>Share a profile to send it without a central server.</Text>
 							<Button title="New profile" disabled={isRunning} onPress={openProfileCreation} />
 							<Button title="Import profile file" disabled={isRunning} onPress={function (): void { void importProfileFile(); }} />
 							{profiles.map(function (profile): React.JSX.Element {
@@ -940,7 +939,6 @@ export default function App(): React.JSX.Element {
 						</Section>
 
 						<Section title="Journal">
-							<Text style={styles.help}>Each session keeps the profile settings it started with, even if that profile is later changed.</Text>
 							{journeys.slice(0, 3).map(renderJourney)}
 							{journeys.length === 0 ? <Text style={styles.empty}>No journal records yet.</Text> : null}
 							{journeys.length > 3 ? <Button title={`View all ${journeys.length} journal records`} onPress={function (): void { setIsJournalBrowserOpen(true); }} /> : null}
