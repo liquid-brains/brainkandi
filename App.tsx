@@ -1,5 +1,6 @@
 import { createContext, createElement, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import {
+	ActionSheetIOS,
 	Button as NativeButton,
 	type ButtonProps,
 	type ViewStyle,
@@ -196,6 +197,13 @@ type ProfileEditorValues = {
 };
 
 type JournalSort = 'newest' | 'oldest' | 'rating-high' | 'rating-low';
+
+const journalSortOptions: { label: string; value: JournalSort }[] = [
+	{ label: 'Newest first', value: 'newest' },
+	{ label: 'Oldest first', value: 'oldest' },
+	{ label: 'Rating: high to low', value: 'rating-high' },
+	{ label: 'Rating: low to high', value: 'rating-low' }
+];
 
 function profileFromEditorValues(values: ProfileEditorValues): SessionProfile {
 	if (values.kind === 'file') {
@@ -988,11 +996,26 @@ export default function App(): React.JSX.Element {
 							<Button title="Back" onPress={function (): void { setIsJournalBrowserOpen(false); }} />
 						</View>
 						<View style={styles.journalControls}>
-							<Text style={styles.label}>Sort</Text>
-							<Button title="Newest first" onPress={function (): void { setJournalSort('newest'); }} />
-							<Button title="Oldest first" onPress={function (): void { setJournalSort('oldest'); }} />
-							<Button title="Rating: high to low" onPress={function (): void { setJournalSort('rating-high'); }} />
-							<Button title="Rating: low to high" onPress={function (): void { setJournalSort('rating-low'); }} />
+							{Platform.OS === 'ios' ? (
+								<Button title={`Sort: ${journalSortOptions.find(function (option): boolean { return(option.value === journalSort); })!.label}`} onPress={function (): void {
+									ActionSheetIOS.showActionSheetWithOptions({
+										title: 'Sort journal records',
+										options: [...journalSortOptions.map(function (option): string { return(option.label); }), 'Cancel'],
+										cancelButtonIndex: journalSortOptions.length
+									}, function (index): void {
+										const option = journalSortOptions[index];
+										if (option !== undefined) {
+											setJournalSort(option.value);
+										}
+									});
+								}} />
+							) : (
+								<Picker accessibilityLabel="Sort journal records" mode="dropdown" selectedValue={journalSort} onValueChange={function (value: JournalSort): void { setJournalSort(value); }} style={styles.picker}>
+									{journalSortOptions.map(function (option): React.JSX.Element {
+										return(<Picker.Item key={option.value} label={option.label} value={option.value} />);
+									})}
+								</Picker>
+							)}
 							<Button title={`Delete ${journeys.filter(function (journey): boolean { return(journey.rating === undefined && journey.id !== activeJourneyID.current); }).length} unrated records`} color="#75113d" disabled={!journeys.some(function (journey): boolean { return(journey.rating === undefined && journey.id !== activeJourneyID.current); })} onPress={function (): void { void deleteUnratedJourneys(); }} />
 						</View>
 						<ScrollView contentContainerStyle={styles.editorForm} keyboardShouldPersistTaps="handled">
