@@ -23,7 +23,6 @@ import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import { StatusBar } from 'expo-status-bar';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system/legacy';
-import * as Notifications from 'expo-notifications';
 import * as Sharing from 'expo-sharing';
 import * as SystemUI from 'expo-system-ui';
 
@@ -37,7 +36,7 @@ import type { ProfileLayout } from './src/core/profile-layout';
 import { AsyncStorageJourneyStore, createJourneyID } from './src/core/journey-store';
 import { AsyncStorageSettingsStore, defaultSettings } from './src/core/settings-store';
 import type { AppSettings } from './src/core/settings-store';
-import { clearSessionNotification } from './src/core/session-notifications';
+import { runWithSessionBackground } from './src/core/session-background';
 import { brandColors, getAppColors } from './src/ui/colors';
 import type { AppColors } from './src/ui/colors';
 import { ProfileLauncher } from './src/ui/ProfileLauncher';
@@ -59,8 +58,6 @@ const ThemeContext = createContext({ colors: brandColors, styles: createStyles(b
 const sessionRunner = new SessionRunner(new VielightDeviceFactory());
 const keepAwakeTag = 'brainkandi-session';
 const addDevicePickerValue = '__add_new_device__';
-const sessionNotificationCategoryID = 'brainkandi-session';
-const stopSessionNotificationActionID = 'stop-session';
 const liquidGlassFilterID = 'brainkandi-liquid-glass';
 
 const webLiquidGlassStyle: ViewStyle = Platform.OS === 'web' ? {
@@ -133,17 +130,6 @@ function LiquidGlassFilters(): React.ReactNode {
 		})
 	))));
 }
-
-Notifications.setNotificationHandler({
-	handleNotification: async function () {
-		return({
-			shouldPlaySound: false,
-			shouldSetBadge: false,
-			shouldShowBanner: true,
-			shouldShowList: true
-		});
-	}
-});
 
 const defaultFileProfileJSON = JSON.stringify({
 	defaultFile: false,
@@ -371,8 +357,6 @@ export default function App(): React.JSX.Element {
 	const [isRunning, setIsRunning] = useState(false);
 	const didStopCurrentSession = useRef(false);
 	const activeJourneyID = useRef<string | undefined>(undefined);
-	const sessionNotificationID = useRef<string | undefined>(undefined);
-	const sessionNotificationVersion = useRef(0);
 	const [editingProfileID, setEditingProfileID] = useState<ProfileID | undefined>();
 	const [profileEditor, setProfileEditor] = useState<ProfileEditorValues | undefined>();
 	const [isCreatingProfile, setIsCreatingProfile] = useState(false);
@@ -496,23 +480,6 @@ export default function App(): React.JSX.Element {
 		void loadDevices();
 	}, [loadDevices, loadJourneys, loadProfiles]);
 
-	useEffect(function (): (() => void) {
-		void configureSessionNotifications();
-		const subscription = Notifications.addNotificationResponseReceivedListener(function (response): void {
-			if (response.actionIdentifier === stopSessionNotificationActionID) {
-				stopSession();
-			}
-		});
-		return(function (): void {
-			subscription.remove();
-		});
-	}, []);
-
-	useEffect(function (): void {
-		sessionNotificationVersion.current++;
-		void updateSessionNotification(isRunning, status, sessionNotificationID, sessionNotificationVersion);
-	}, [isRunning, status]);
-
 	const run = useCallback(async function (profile: SessionProfile, operation: (setSessionStatus: (status: string) => void, onGeneratedFile: (fileName: string, data: Record<string, unknown>) => void) => Promise<void>): Promise<void> {
 		if (isRunning) {
 			return;
@@ -532,8 +499,10 @@ export default function App(): React.JSX.Element {
 			await journeyStore.save(journey);
 			await loadJourneys();
 			await activateKeepAwakeAsync(keepAwakeTag);
-			await operation(setStatus, function (fileName, data): void {
-				journey.files.push({ fileName: fileName, data: JSON.parse(JSON.stringify(data)) as Record<string, unknown> });
+			await runWithSessionBackground(async function (): Promise<void> {
+				await operation(setStatus, function (fileName, data): void {
+					journey.files.push({ fileName: fileName, data: JSON.parse(JSON.stringify(data)) as Record<string, unknown> });
+				});
 			});
 			journey.outcome = 'completed';
 			setStatus('Session finished.');
@@ -1538,74 +1507,6 @@ function JourneyParametersModal(props: {
 			</SafeAreaView>
 		</Modal>
 	);
-}
-
-async function configureSessionNotifications(): Promise<void> {
-	if (Platform.OS === 'web') {
-		return;
-	}
-	await Notifications.setNotificationCategoryAsync(sessionNotificationCategoryID, [
-		{
-			identifier: stopSessionNotificationActionID,
-			buttonTitle: 'Stop session',
-			options: { opensAppToForeground: true }
-		}
-	]);
-	const permissions = await Notifications.getPermissionsAsync();
-	if (permissions.status !== 'granted') {
-		await Notifications.requestPermissionsAsync();
-	}
-}
-
-async function updateSessionNotification(isRunning: boolean, status: string, notificationID: React.MutableRefObject<string | undefined>, notificationVersion: React.MutableRefObject<number>): Promise<void> {
-	if (Platform.OS === 'web') {
-		return;
-	}
-	const updateVersion = notificationVersion.current;
-	if (notificationID.current !== undefined) {
-		await clearSessionNotification(notificationID.current, Notifications);
-		if (notificationVersion.current !== updateVersion) {
-			return;
-		}
-		notificationID.current = undefined;
-	}
-	await dismissPresentedSessionNotifications();
-	if (notificationVersion.current !== updateVersion) {
-		return;
-	}
-	if (!isRunning) {
-		return;
-	}
-	const permissions = await Notifications.getPermissionsAsync();
-	if (permissions.status !== 'granted') {
-		return;
-	}
-	if (notificationVersion.current !== updateVersion) {
-		return;
-	}
-	const scheduledNotificationID = await Notifications.scheduleNotificationAsync({
-		content: {
-			title: 'Brain Kandi session',
-			body: status,
-			categoryIdentifier: sessionNotificationCategoryID,
-			sticky: true
-		},
-		trigger: null
-	});
-	if (notificationVersion.current !== updateVersion) {
-		await clearSessionNotification(scheduledNotificationID, Notifications);
-		return;
-	}
-	notificationID.current = scheduledNotificationID;
-}
-
-async function dismissPresentedSessionNotifications(): Promise<void> {
-	const notifications = await Notifications.getPresentedNotificationsAsync();
-	await Promise.all(notifications.filter(function (notification): boolean {
-		return(notification.request.content.categoryIdentifier === sessionNotificationCategoryID);
-	}).map(async function (notification): Promise<void> {
-		await Notifications.dismissNotificationAsync(notification.request.identifier);
-	}));
 }
 
 function parseFileData(serialized: string): Record<string, unknown> {
