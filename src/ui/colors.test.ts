@@ -42,6 +42,11 @@ describe('app colors', function () {
 		expect(light.button).toBe('#007aff');
 	});
 
+	it('separates system light item surfaces from sections', function () {
+		const light = getAppColors(true, 'light');
+		expect(light.surface).not.toBe(light.section);
+	});
+
 	it('visibly separates system light sections from the page background', function () {
 		const light = getAppColors(true, 'light');
 		expect(contrastRatio(light.sectionBorder, light.background)).toBeGreaterThanOrEqual(3);

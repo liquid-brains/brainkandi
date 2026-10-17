@@ -44,7 +44,7 @@ export function getAppColors(useSystemColors: boolean, colorScheme: 'light' | 'd
 	return({
 		background: '#d1d1d6',
 		section: '#fff',
-		surface: '#fff',
+		surface: '#f2f2f7',
 		text: '#1c1c1e',
 		title: '#000',
 		inputText: '#000',
