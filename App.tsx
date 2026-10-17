@@ -364,6 +364,7 @@ export default function App(): React.JSX.Element {
 	const [isSavingLayout, setIsSavingLayout] = useState(false);
 	const [isDraggingProfile, setIsDraggingProfile] = useState(false);
 	const [selectedProfileID, setSelectedProfileID] = useState<ProfileID>();
+	const pendingProfileEditor = useRef<StoredProfile | undefined>(undefined);
 	const [journeys, setJourneys] = useState<Journey[]>([]);
 	const [isJournalBrowserOpen, setIsJournalBrowserOpen] = useState(false);
 	const [journalSort, setJournalSort] = useState<JournalSort>('newest');
@@ -647,6 +648,15 @@ export default function App(): React.JSX.Element {
 		}
 	}
 
+	function requestProfileEditor(profile: StoredProfile): void {
+		if (Platform.OS === 'ios' && selectedProfileID !== undefined) {
+			pendingProfileEditor.current = profile;
+			setSelectedProfileID(undefined);
+			return;
+		}
+		openProfileEditor(profile);
+	}
+
 	function openProfileEditor(profile: StoredProfile): void {
 		setSelectedProfileID(undefined);
 		if (profile.profile.kind === 'ai' || profile.profile.kind === 'rest') {
@@ -887,7 +897,7 @@ export default function App(): React.JSX.Element {
 				</View>
 				<View style={styles.profileButtons}>
 					<Button title="Run" disabled={isRunning || item.profile.kind === 'ai' || validationErrors.length > 0 || sequenceError !== undefined} onPress={function (): void { runSavedProfile(item); }} />
-					<Button title="View / edit" disabled={isRunning} onPress={function (): void { openProfileEditor(item); }} />
+					<Button title="View / edit" disabled={isRunning} onPress={function (): void { requestProfileEditor(item); }} />
 					<Button title="Export file" disabled={isRunning} onPress={function (): void { void exportProfile(item); }} />
 					<Button title="Delete" color="#75113d" disabled={isRunning} onPress={function (): void { void deleteProfile(item); }} />
 				</View>
@@ -1000,7 +1010,13 @@ export default function App(): React.JSX.Element {
 
 					</ScrollView>
 				</KeyboardAvoidingView>
-				<Modal visible={selectedProfileID !== undefined} animationType="slide" onRequestClose={function (): void { setSelectedProfileID(undefined); }}>
+				<Modal visible={selectedProfileID !== undefined} animationType="slide" onRequestClose={function (): void { setSelectedProfileID(undefined); }} onDismiss={function (): void {
+					const profile = pendingProfileEditor.current;
+					pendingProfileEditor.current = undefined;
+					if (profile !== undefined) {
+						openProfileEditor(profile);
+					}
+				}}>
 					<SafeAreaView style={styles.documentModal}>
 						<ScrollView contentContainerStyle={styles.editorForm}>
 							<Button title="Back to profiles" onPress={function (): void { setSelectedProfileID(undefined); }} />
