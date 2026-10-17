@@ -13,7 +13,7 @@
       "backgroundColor": "#ff1493"
     },
     "plugins": [
-      "expo-notifications",
+      "./plugins/with-session-background.js",
       "./plugins/with-android-cleartext.js",
       "expo-sharing"
     ],
