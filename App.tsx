@@ -32,12 +32,15 @@ import { BrainlightError } from '@liquid-brains/brainlight/lib/neuropro/index.js
 import type { RandomSessionField } from '@liquid-brains/brainlight/lib/neuropro/index.js';
 import { AsyncStorageDeviceStore } from './src/core/device-store';
 import { AsyncStorageProfileStore } from './src/core/profile-store';
+import { AsyncStorageProfileLayoutStore, reconcileProfileLayout } from './src/core/profile-layout';
+import type { ProfileLayout } from './src/core/profile-layout';
 import { AsyncStorageJourneyStore, createJourneyID } from './src/core/journey-store';
 import { AsyncStorageSettingsStore, defaultSettings } from './src/core/settings-store';
 import type { AppSettings } from './src/core/settings-store';
 import { clearSessionNotification } from './src/core/session-notifications';
 import { brandColors, getAppColors } from './src/ui/colors';
 import type { AppColors } from './src/ui/colors';
+import { ProfileLauncher } from './src/ui/ProfileLauncher';
 import type { SavedDevice } from './src/core/device-store';
 import type { Journey, JourneyFile, JourneyRating } from './src/core/journey-store';
 import { encapsulateSharedProfile } from './src/core/profile-codec';
@@ -48,6 +51,7 @@ import type { FormValues, FrequencyRangeForm } from './src/core/random-profile-f
 import { defaultFormValues, getRandomFormValidationErrors, randomFormFromProfile, randomParametersFromProfile, randomProfileFromForm } from './src/core/random-profile-form';
 
 const profileStore = new AsyncStorageProfileStore();
+const profileLayoutStore = new AsyncStorageProfileLayoutStore();
 const deviceStore = new AsyncStorageDeviceStore();
 const journeyStore = new AsyncStorageJourneyStore();
 const settingsStore = new AsyncStorageSettingsStore();
@@ -356,6 +360,12 @@ export default function App(): React.JSX.Element {
 	const [newDeviceAddress, setNewDeviceAddress] = useState('np1.local');
 	const [isAddingDevice, setIsAddingDevice] = useState(false);
 	const [profiles, setProfiles] = useState<StoredProfile[]>([]);
+	const [profileLayout, setProfileLayout] = useState<ProfileLayout>([]);
+	const [isLoadingProfiles, setIsLoadingProfiles] = useState(true);
+	const [isSavingLayout, setIsSavingLayout] = useState(false);
+	const [isDraggingProfile, setIsDraggingProfile] = useState(false);
+	const [selectedProfileID, setSelectedProfileID] = useState<ProfileID>();
+	const pendingProfileEditor = useRef<StoredProfile | undefined>(undefined);
 	const [journeys, setJourneys] = useState<Journey[]>([]);
 	const [isJournalBrowserOpen, setIsJournalBrowserOpen] = useState(false);
 	const [journalSort, setJournalSort] = useState<JournalSort>('newest');
@@ -419,12 +429,38 @@ export default function App(): React.JSX.Element {
 	}
 
 	const loadProfiles = useCallback(async function (): Promise<void> {
+		setIsLoadingProfiles(true);
 		try {
-			setProfiles(await profileStore.list());
+			const loaded = await profileStore.list();
+			setProfiles(loaded);
+			const ids = loaded.map(function (item): ProfileID { return(item.id); });
+			try {
+				setProfileLayout(reconcileProfileLayout(await profileLayoutStore.load(), ids));
+			} catch (error) {
+				setProfileLayout(reconcileProfileLayout([], ids));
+				setStatus(errorMessage(error));
+			}
 		} catch (error) {
 			setStatus(errorMessage(error));
+		} finally {
+			setIsLoadingProfiles(false);
 		}
 	}, []);
+
+	async function saveProfileLayout(layout: ProfileLayout): Promise<void> {
+		if (isLoadingProfiles || isSavingLayout || isRunning) {
+			return;
+		}
+		setIsSavingLayout(true);
+		try {
+			await profileLayoutStore.save(layout);
+			setProfileLayout(layout);
+		} catch (error) {
+			setStatus(errorMessage(error));
+		} finally {
+			setIsSavingLayout(false);
+		}
+	}
 
 	const loadJourneys = useCallback(async function (): Promise<void> {
 		try {
@@ -605,6 +641,7 @@ export default function App(): React.JSX.Element {
 	async function deleteProfile(profile: StoredProfile): Promise<void> {
 		try {
 			await profileStore.remove(profile.id);
+			setSelectedProfileID(undefined);
 			await loadProfiles();
 			setStatus(`Deleted ${profile.profile.name}.`);
 		} catch (error) {
@@ -612,7 +649,17 @@ export default function App(): React.JSX.Element {
 		}
 	}
 
+	function requestProfileEditor(profile: StoredProfile): void {
+		if (Platform.OS === 'ios' && selectedProfileID !== undefined) {
+			pendingProfileEditor.current = profile;
+			setSelectedProfileID(undefined);
+			return;
+		}
+		openProfileEditor(profile);
+	}
+
 	function openProfileEditor(profile: StoredProfile): void {
+		setSelectedProfileID(undefined);
 		if (profile.profile.kind === 'ai' || profile.profile.kind === 'rest') {
 			setStatus('This profile type cannot be edited.');
 			return;
@@ -851,7 +898,7 @@ export default function App(): React.JSX.Element {
 				</View>
 				<View style={styles.profileButtons}>
 					<Button title="Run" disabled={isRunning || item.profile.kind === 'ai' || validationErrors.length > 0 || sequenceError !== undefined} onPress={function (): void { runSavedProfile(item); }} />
-					<Button title="View / edit" disabled={isRunning} onPress={function (): void { openProfileEditor(item); }} />
+					<Button title="View / edit" disabled={isRunning} onPress={function (): void { requestProfileEditor(item); }} />
 					<Button title="Export file" disabled={isRunning} onPress={function (): void { void exportProfile(item); }} />
 					<Button title="Delete" color="#75113d" disabled={isRunning} onPress={function (): void { void deleteProfile(item); }} />
 				</View>
@@ -934,6 +981,7 @@ export default function App(): React.JSX.Element {
 					<ScrollView
 						contentContainerStyle={styles.container}
 						keyboardShouldPersistTaps="handled"
+						scrollEnabled={!isDraggingProfile}
 					>
 						<Image source={require('./logo/brainkandi.png')} style={styles.logo} resizeMode="contain" />
 						<Text style={styles.status}>{status}</Text>
@@ -941,11 +989,17 @@ export default function App(): React.JSX.Element {
 						{renderStopSessionButton()}
 
 						<Section title="Saved profiles">
-							<Button title="New profile" disabled={isRunning} onPress={openProfileCreation} />
-							<Button title="Import profile file" disabled={isRunning} onPress={function (): void { void importProfileFile(); }} />
-							{profiles.map(function (profile): React.JSX.Element {
-								return(renderProfile(profile));
-							})}
+							<Button title="New profile" disabled={isRunning || isLoadingProfiles || isSavingLayout} onPress={openProfileCreation} />
+							<Button title="Import profile file" disabled={isRunning || isLoadingProfiles || isSavingLayout} onPress={function (): void { void importProfileFile(); }} />
+							<ProfileLauncher
+								profiles={profiles}
+								layout={profileLayout}
+								colors={colors}
+								disabled={isRunning || isLoadingProfiles || isSavingLayout}
+								onChange={function (layout): void { void saveProfileLayout(layout); }}
+								onOpen={function (profile): void { setSelectedProfileID(profile.id); }}
+								onDragging={setIsDraggingProfile}
+							/>
 							{renderEmptyProfiles()}
 						</Section>
 
@@ -957,6 +1011,22 @@ export default function App(): React.JSX.Element {
 
 					</ScrollView>
 				</KeyboardAvoidingView>
+				<Modal visible={selectedProfileID !== undefined} animationType="slide" onRequestClose={function (): void { setSelectedProfileID(undefined); }} onDismiss={function (): void {
+					const profile = pendingProfileEditor.current;
+					pendingProfileEditor.current = undefined;
+					if (profile !== undefined) {
+						openProfileEditor(profile);
+					}
+				}}>
+					<SafeAreaView style={styles.documentModal}>
+						<ScrollView contentContainerStyle={styles.editorForm}>
+							<Button title="Back to profiles" onPress={function (): void { setSelectedProfileID(undefined); }} />
+							<Text style={styles.status} accessibilityLiveRegion="polite">{status}</Text>
+							{renderStopSessionButton()}
+							{profiles.filter(function (profile): boolean { return(profile.id === selectedProfileID); }).map(function (profile): React.JSX.Element { return(<View key={profile.id}>{renderProfile(profile)}</View>); })}
+						</ScrollView>
+					</SafeAreaView>
+				</Modal>
 				<Modal visible={isSettingsOpen} animationType="slide" onRequestClose={function (): void { setIsSettingsOpen(false); }}>
 					<SafeAreaView style={styles.documentModal}>
 						<View style={styles.settingsHeader}>
