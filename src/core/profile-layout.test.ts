@@ -33,43 +33,51 @@ describe('profile launcher layout', function () {
 	});
 
 	it('inserts profiles in list order without swapping intermediate items or creating gaps', function () {
-		const moved = dropProfileTile([tile(a), tile(b), tile(c)], 0, 2, false, 'folder');
+		const moved = dropProfileTile([tile(a), tile(b), tile(c)], 0, 2);
 		expect(moved).toEqual([tile(b), tile(c), tile(a)]);
-		expect(dropProfileTile(moved, 2, 0, false, 'folder')).toEqual([tile(a), tile(b), tile(c)]);
-		expect(dropProfileTile(moved, 0, 3, false, 'folder')).toBe(moved);
+		expect(dropProfileTile(moved, 2, 0)).toEqual([tile(a), tile(b), tile(c)]);
+		expect(dropProfileTile(moved, 0, 3)).toBe(moved);
 	});
 
-	it('creates folders and adds profiles to existing folders', function () {
-		const grouped = dropProfileTile([tile(a), tile(b), tile(c)], 0, 1, true, 'folder');
-		expect(grouped).toEqual([{ kind: 'folder', id: 'folder', name: 'New folder', profiles: [b, a] }, tile(c)]);
-		expect(dropProfileTile(grouped, 1, 0, true, 'unused')).toEqual([{ kind: 'folder', id: 'folder', name: 'New folder', profiles: [b, a, c] }]);
-		expect(dropProfileTile([tile(c), grouped[0]!], 0, 1, true, 'unused')).toEqual([{ kind: 'folder', id: 'folder', name: 'New folder', profiles: [b, a, c] }]);
+	it('moves profiles into folders when dropped on them without grouping profiles', function () {
+		const folder = { kind: 'folder' as const, id: 'folder', name: 'Favorites', profiles: [a] };
+		expect(dropProfileTile([tile(b), folder], 0, 1)).toEqual([{ kind: 'folder', id: 'folder', name: 'Favorites', profiles: [a, b] }]);
+		expect(dropProfileTile([tile(b), { ...folder, profiles: [] }], 0, 1)).toEqual([{ ...folder, profiles: [b] }]);
+		expect(dropProfileTile([tile(a), tile(b)], 0, 1)).toEqual([tile(b), tile(a)]);
 	});
 
 	it('moves folders as a unit instead of nesting them', function () {
 		const folder = { kind: 'folder' as const, id: 'folder', name: 'Favorites', profiles: [a, b] };
-		expect(dropProfileTile([folder, tile(c)], 0, 1, true, 'unused')).toEqual([tile(c), folder]);
+		expect(dropProfileTile([folder, tile(c)], 0, 1)).toEqual([tile(c), folder]);
 	});
 
 	it('ignores invalid, empty, and same-position drops', function () {
 		const layout = [tile(a), null];
 		for (const [from, to] of [[0, 0], [1, 0], [-1, 0], [0, -1], [0, 99], [0, 0.5]]) {
-			expect(dropProfileTile(layout, from!, to!, true, 'folder')).toBe(layout);
+			expect(dropProfileTile(layout, from!, to!)).toBe(layout);
 		}
 	});
 
-	it('removes deleted profiles and empty folders without losing other placements', function () {
+	it('removes deleted profiles while preserving folders that are empty', function () {
 		const layout: ProfileLayout = [tile(a), { kind: 'folder', id: 'folder', name: 'Favorites', profiles: [b, c] }];
 		expect(reconcileProfileLayout(layout, [b])).toEqual([{ kind: 'folder', id: 'folder', name: 'Favorites', profiles: [b] }]);
-		expect(reconcileProfileLayout(layout, [a])).toEqual([tile(a)]);
+		expect(reconcileProfileLayout(layout, [a])).toEqual([tile(a), { kind: 'folder', id: 'folder', name: 'Favorites', profiles: [] }]);
 	});
 
-	it('appends a profile moved out of a folder and removes empty folders and legacy gaps', function () {
+	it('appends a profile moved out of a folder and preserves the folder when it becomes empty', function () {
 		const layout: ProfileLayout = [null, { kind: 'folder', id: 'folder', name: 'Favorites', profiles: [a, b] }];
 		const moved = moveProfileOut(layout, 'folder', a);
 		expect(moved).toEqual([{ kind: 'folder', id: 'folder', name: 'Favorites', profiles: [b] }, tile(a)]);
-		expect(moveProfileOut(moved, 'folder', b)).toEqual([tile(a), tile(b)]);
+		expect(moveProfileOut(moved, 'folder', b)).toEqual([{ kind: 'folder', id: 'folder', name: 'Favorites', profiles: [] }, tile(a), tile(b)]);
 		expect(moveProfileOut(layout, 'missing', a)).toBe(layout);
+	});
+
+	it('persists newly created empty folders', async function () {
+		const store = new AsyncStorageProfileLayoutStore();
+		const layout: ProfileLayout = [{ kind: 'folder', id: 'folder', name: 'New folder', profiles: [] }];
+		await store.save(layout);
+		expect(await store.load()).toEqual(layout);
+		expect(reconcileProfileLayout(layout, [a])).toEqual([...layout, tile(a)]);
 	});
 
 	it('persists positions, folder names and child order independently of profiles', async function () {
@@ -95,7 +103,6 @@ describe('profile launcher layout', function () {
 		'{"version":1,"slots":[{"kind":"profile","profileID":2}]}',
 		'{"version":1,"slots":[{"kind":"profile","profileID":"a"},{"kind":"profile","profileID":"a"}]}',
 		'{"version":1,"slots":[{"kind":"folder","id":"f","name":" ","profiles":["a"]}]}',
-		'{"version":1,"slots":[{"kind":"folder","id":"f","name":"Folder","profiles":[]}]}',
 		'{"version":1,"slots":[{"kind":"folder","id":"f","name":"Folder","profiles":["a"]},{"kind":"folder","id":"f","name":"Folder","profiles":["b"]}]}'
 	])('rejects malformed layout %s', function (serialized) {
 		expect(function () { decodeProfileLayout(serialized); }).toThrow();
