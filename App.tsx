@@ -35,6 +35,7 @@ import { AsyncStorageProfileStore } from './src/core/profile-store';
 import { AsyncStorageJourneyStore, createJourneyID } from './src/core/journey-store';
 import { AsyncStorageSettingsStore, defaultSettings } from './src/core/settings-store';
 import type { AppSettings } from './src/core/settings-store';
+import { clearSessionNotification } from './src/core/session-notifications';
 import { brandColors, getAppColors } from './src/ui/colors';
 import type { AppColors } from './src/ui/colors';
 import type { SavedDevice } from './src/core/device-store';
@@ -1521,7 +1522,7 @@ async function updateSessionNotification(isRunning: boolean, status: string, not
 	}
 	const updateVersion = notificationVersion.current;
 	if (notificationID.current !== undefined) {
-		await Notifications.dismissNotificationAsync(notificationID.current);
+		await clearSessionNotification(notificationID.current, Notifications);
 		if (notificationVersion.current !== updateVersion) {
 			return;
 		}
@@ -1551,7 +1552,7 @@ async function updateSessionNotification(isRunning: boolean, status: string, not
 		trigger: null
 	});
 	if (notificationVersion.current !== updateVersion) {
-		await Notifications.dismissNotificationAsync(scheduledNotificationID);
+		await clearSessionNotification(scheduledNotificationID, Notifications);
 		return;
 	}
 	notificationID.current = scheduledNotificationID;
