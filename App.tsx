@@ -364,8 +364,6 @@ export default function App(): React.JSX.Element {
 	const [isLoadingProfiles, setIsLoadingProfiles] = useState(true);
 	const [isSavingLayout, setIsSavingLayout] = useState(false);
 	const [isDraggingProfile, setIsDraggingProfile] = useState(false);
-	const [selectedProfileID, setSelectedProfileID] = useState<ProfileID>();
-	const pendingProfileEditor = useRef<StoredProfile | undefined>(undefined);
 	const [journeys, setJourneys] = useState<Journey[]>([]);
 	const [isJournalBrowserOpen, setIsJournalBrowserOpen] = useState(false);
 	const [journalSort, setJournalSort] = useState<JournalSort>('newest');
@@ -641,7 +639,6 @@ export default function App(): React.JSX.Element {
 	async function deleteProfile(profile: StoredProfile): Promise<void> {
 		try {
 			await profileStore.remove(profile.id);
-			setSelectedProfileID(undefined);
 			await loadProfiles();
 			setStatus(`Deleted ${profile.profile.name}.`);
 		} catch (error) {
@@ -649,17 +646,7 @@ export default function App(): React.JSX.Element {
 		}
 	}
 
-	function requestProfileEditor(profile: StoredProfile): void {
-		if (Platform.OS === 'ios' && selectedProfileID !== undefined) {
-			pendingProfileEditor.current = profile;
-			setSelectedProfileID(undefined);
-			return;
-		}
-		openProfileEditor(profile);
-	}
-
 	function openProfileEditor(profile: StoredProfile): void {
-		setSelectedProfileID(undefined);
 		if (profile.profile.kind === 'ai' || profile.profile.kind === 'rest') {
 			setStatus('This profile type cannot be edited.');
 			return;
@@ -898,7 +885,7 @@ export default function App(): React.JSX.Element {
 				</View>
 				<View style={styles.profileButtons}>
 					<Button title="Run" disabled={isRunning || item.profile.kind === 'ai' || validationErrors.length > 0 || sequenceError !== undefined} onPress={function (): void { runSavedProfile(item); }} />
-					<Button title="View / edit" disabled={isRunning} onPress={function (): void { requestProfileEditor(item); }} />
+					<Button title="View / edit" disabled={isRunning} onPress={function (): void { openProfileEditor(item); }} />
 					<Button title="Export file" disabled={isRunning} onPress={function (): void { void exportProfile(item); }} />
 					<Button title="Delete" color="#75113d" disabled={isRunning} onPress={function (): void { void deleteProfile(item); }} />
 				</View>
@@ -997,7 +984,7 @@ export default function App(): React.JSX.Element {
 								colors={colors}
 								disabled={isRunning || isLoadingProfiles || isSavingLayout}
 								onChange={function (layout): void { void saveProfileLayout(layout); }}
-								onOpen={function (profile): void { setSelectedProfileID(profile.id); }}
+								renderProfile={renderProfile}
 								onDragging={setIsDraggingProfile}
 							/>
 							{renderEmptyProfiles()}
@@ -1011,22 +998,6 @@ export default function App(): React.JSX.Element {
 
 					</ScrollView>
 				</KeyboardAvoidingView>
-				<Modal visible={selectedProfileID !== undefined} animationType="slide" onRequestClose={function (): void { setSelectedProfileID(undefined); }} onDismiss={function (): void {
-					const profile = pendingProfileEditor.current;
-					pendingProfileEditor.current = undefined;
-					if (profile !== undefined) {
-						openProfileEditor(profile);
-					}
-				}}>
-					<SafeAreaView style={styles.documentModal}>
-						<ScrollView contentContainerStyle={styles.editorForm}>
-							<Button title="Back to profiles" onPress={function (): void { setSelectedProfileID(undefined); }} />
-							<Text style={styles.status} accessibilityLiveRegion="polite">{status}</Text>
-							{renderStopSessionButton()}
-							{profiles.filter(function (profile): boolean { return(profile.id === selectedProfileID); }).map(function (profile): React.JSX.Element { return(<View key={profile.id}>{renderProfile(profile)}</View>); })}
-						</ScrollView>
-					</SafeAreaView>
-				</Modal>
 				<Modal visible={isSettingsOpen} animationType="slide" onRequestClose={function (): void { setIsSettingsOpen(false); }}>
 					<SafeAreaView style={styles.documentModal}>
 						<View style={styles.settingsHeader}>

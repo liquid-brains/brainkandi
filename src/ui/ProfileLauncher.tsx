@@ -7,7 +7,8 @@ import type { ProfileFolder, ProfileLayout, ProfileTile } from '../core/profile-
 import { createProfileID } from '../core/profiles';
 import type { ProfileID, StoredProfile } from '../core/profiles';
 import type { AppColors } from './colors';
-import { profileDragPosition, profileDropTarget, profileGridColumns as columns, profileGridRowHeight as rowHeight } from './profile-drag';
+import { profileDragPosition, profileDropTarget } from './profile-drag';
+import type { ProfileRowBounds } from './profile-drag';
 
 type Drag = { from: number; x: number; y: number };
 
@@ -17,7 +18,7 @@ export function ProfileLauncher(props: {
 	colors: AppColors;
 	disabled: boolean;
 	onChange: (layout: ProfileLayout) => void;
-	onOpen: (profile: StoredProfile) => void;
+	renderProfile: (profile: StoredProfile) => React.JSX.Element;
 	onDragging: (dragging: boolean) => void;
 }): React.JSX.Element {
 	const [folderID, setFolderID] = useState<string>();
@@ -26,10 +27,10 @@ export function ProfileLauncher(props: {
 	const [selected, setSelected] = useState<number>();
 	const grid = useRef<View>(null);
 	const bounds = useRef({ x: 0, y: 0, width: 0, height: 0 });
+	const rows = useRef<ProfileRowBounds[]>([]);
 	const activeDrag = useRef<Drag | undefined>(undefined);
 	const folder = props.layout.find(function (slot): slot is ProfileFolder { return(slot?.kind === 'folder' && slot.id === folderID); });
-	const slots: ProfileLayout = folder === undefined ? props.layout : folder.profiles.map(function (id): ProfileTile { return({ kind: 'profile', profileID: id }); });
-	const slotCount = Math.ceil((slots.length + 1) / columns) * columns;
+	const slots = folder === undefined ? props.layout.filter(function (slot) { return(slot !== null); }) : folder.profiles.map(function (id): ProfileTile { return({ kind: 'profile', profileID: id }); });
 	const styles = makeStyles(props.colors);
 
 	useEffect(function () {
@@ -101,7 +102,7 @@ export function ProfileLauncher(props: {
 		if (current === undefined || props.disabled) {
 			return;
 		}
-		const target = profileDropTarget(current, bounds.current);
+		const target = profileDropTarget(current, bounds.current, rows.current.slice(0, slots.length));
 		if (target !== undefined) {
 			place(current.from, target.index, target.group);
 		}
@@ -112,18 +113,6 @@ export function ProfileLauncher(props: {
 			return(slot.name);
 		}
 		return(props.profiles.find(function (profile): boolean { return(profile.id === slot.profileID); })?.profile.name ?? 'Profile');
-	}
-
-	function open(slot: ProfileTile | ProfileFolder): void {
-		if (slot.kind === 'folder') {
-			setFolderID(slot.id);
-			setFolderName(slot.name);
-		} else {
-			const profile = props.profiles.find(function (item): boolean { return(item.id === slot.profileID); });
-			if (profile !== undefined) {
-				props.onOpen(profile);
-			}
-		}
 	}
 
 	const draggedSlot = drag === undefined ? undefined : slots[drag.from];
@@ -138,8 +127,8 @@ export function ProfileLauncher(props: {
 				}} />
 			</View>}
 			<Text style={styles.help}>{folder === undefined
-				? 'Hold a tile to drag it. Drop in an empty space to place it, or at a tile’s edge to swap. Drop in the center to create or join a folder.'
-				: 'Hold a tile to drag and reorder it. To move a profile out of this folder, choose Move, then Move to home.'}</Text>
+				? 'Hold a profile or folder to drag it. Drop near the top or bottom of an item to reorder, or in its center to create or join a folder.'
+				: 'Hold a profile to drag and reorder it. To move a profile out of this folder, choose Move, then Move to home.'}</Text>
 			{selected !== undefined && <View style={styles.controls}>
 				<Text style={styles.help}>{folder === undefined ? 'Choose a destination. Use “Group here” to create or join a folder.' : 'Choose a destination, or move this profile to home.'}</Text>
 				<Button title="Cancel move" onPress={function (): void { setSelected(undefined); }} />
@@ -158,29 +147,39 @@ export function ProfileLauncher(props: {
 				onTouchCancel={cancelDrag}
 				onPointerUp={finishDrag}
 			>
-				{Array.from({ length: slotCount }, function (_, index): React.JSX.Element {
-					const slot = slots[index] ?? null;
+				{slots.map(function (slot, index): React.JSX.Element {
+					const profile = slot.kind === 'profile' ? props.profiles.find(function (item): boolean { return(item.id === slot.profileID); }) : undefined;
 					return(
-						<View key={index} style={styles.cell}>
+						<View key={index} style={styles.cell} onLayout={function (event): void {
+							const { y, height } = event.nativeEvent.layout;
+							rows.current[index] = { y: y, height: height };
+						}}>
 							<Pressable
-								accessibilityRole="button"
-								accessibilityLabel={slot === null ? `Empty position ${index + 1}` : `${slot.kind === 'folder' ? 'Folder: ' : ''}${label(slot)}`}
+								accessibilityRole={slot.kind === 'folder' || selected !== undefined ? 'button' : undefined}
+								accessibilityLabel={`${slot.kind === 'folder' ? 'Folder: ' : ''}${label(slot)}`}
 								accessibilityHint="Hold to drag, or use the Move button."
-								disabled={props.disabled || (slot === null && selected === undefined)}
+								accessible={slot.kind === 'folder' || selected !== undefined}
+								disabled={props.disabled}
 								delayLongPress={400}
-								onLongPress={function (event): void { if (slot !== null) { startDrag(index, event); } }}
+								onLongPress={function (event): void { startDrag(index, event); }}
 								onPress={function (): void {
 									if (activeDrag.current !== undefined) { return; }
-									if (selected !== undefined) { place(selected, index, false); } else if (slot !== null) { open(slot); }
+									if (selected !== undefined) {
+										place(selected, index, false);
+									} else if (slot.kind === 'folder') {
+										setFolderID(slot.id);
+										setFolderName(slot.name);
+									}
 								}}
-								style={[styles.tile, slot === null && styles.empty, (drag?.from === index || selected === index) && styles.moving]}
+								style={[styles.tile, (drag?.from === index || selected === index) && styles.moving]}
 							>
-								<Text style={styles.icon}>{slot === null ? '＋' : slot.kind === 'folder' ? '▦' : '◈'}</Text>
-								<Text numberOfLines={2} style={styles.name}>{slot === null ? 'Empty' : label(slot)}</Text>
-								{slot?.kind === 'folder' && <Text style={styles.help}>{slot.profiles.length} profiles</Text>}
+								{slot.kind === 'folder' ? <View style={styles.folder}>
+									<Text style={styles.name}>{slot.name}</Text>
+									<Text style={styles.help}>{slot.profiles.length} profiles</Text>
+								</View> : profile !== undefined && props.renderProfile(profile)}
 							</Pressable>
-							{slot !== null && selected === undefined && <Pressable accessibilityRole="button" accessibilityLabel={`Move ${label(slot)}`} disabled={props.disabled} onPress={function (): void { setSelected(index); }}><Text style={styles.move}>Move</Text></Pressable>}
-							{selected !== undefined && selected !== index && folder === undefined && selectedSlot?.kind === 'profile' && slot !== null && <Pressable accessibilityRole="button" accessibilityLabel={`Group in ${label(slot)}`} disabled={props.disabled} onPress={function (): void { place(selected, index, true); }}><Text style={styles.move}>Group here</Text></Pressable>}
+							{selected === undefined && <Pressable accessibilityRole="button" accessibilityLabel={`Move ${label(slot)}`} disabled={props.disabled} onPress={function (): void { setSelected(index); }}><Text style={styles.move}>Move</Text></Pressable>}
+							{selected !== undefined && selected !== index && folder === undefined && selectedSlot?.kind === 'profile' && <Pressable accessibilityRole="button" accessibilityLabel={`Group in ${label(slot)}`} disabled={props.disabled} onPress={function (): void { place(selected, index, true); }}><Text style={styles.move}>Group here</Text></Pressable>}
 						</View>
 					);
 				})}
@@ -195,13 +194,12 @@ export function ProfileLauncher(props: {
 
 function makeStyles(colors: AppColors) {
 	return(StyleSheet.create({
-		grid: { flexDirection: 'row', flexWrap: 'wrap', position: 'relative' },
-		cell: { width: '33.333333%', height: rowHeight, padding: 3 },
-		tile: { height: 80, padding: 4, borderWidth: 1, borderColor: colors.border, borderRadius: 12, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center' },
-		empty: { borderStyle: 'dashed', opacity: 0.45 },
+		grid: { position: 'relative' },
+		cell: { width: '100%' },
+		tile: { width: '100%', userSelect: 'none' },
+		folder: { marginTop: 2, padding: 14, borderRadius: 8, backgroundColor: colors.surface },
 		moving: { opacity: 0.4, borderColor: colors.accent },
-		icon: { color: colors.title, fontSize: 24 },
-		name: { color: colors.text, textAlign: 'center', fontWeight: '600' },
+		name: { color: colors.text, fontSize: 17, fontWeight: '700' },
 		help: { color: colors.text, fontSize: 12, marginVertical: 4 },
 		move: { color: colors.title, textAlign: 'center', padding: 4, textDecorationLine: 'underline' },
 		controls: { gap: 6, marginVertical: 8 },

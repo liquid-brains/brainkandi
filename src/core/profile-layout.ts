@@ -36,7 +36,7 @@ export function decodeProfileLayout(serialized: string): ProfileLayout {
 			}
 		}
 		throw(new Error('Saved profile layout contains an invalid item.'));
-	}));
+	}).filter(function (slot) { return(slot !== null); }));
 }
 
 export function reconcileProfileLayout(layout: ProfileLayout, profileIDs: ProfileID[]): ProfileLayout {
@@ -53,10 +53,7 @@ export function reconcileProfileLayout(layout: ProfileLayout, profileIDs: Profil
 		}
 		const profiles = slot.profiles.filter(keep);
 		return(profiles.length === 0 ? null : { ...slot, profiles: profiles });
-	});
-	while (updated.length > 0 && updated[updated.length - 1] === null) {
-		updated.pop();
-	}
+	}).filter(function (slot) { return(slot !== null); });
 	for (const id of remaining) {
 		updated.push({ kind: 'profile', profileID: id });
 	}
@@ -64,7 +61,7 @@ export function reconcileProfileLayout(layout: ProfileLayout, profileIDs: Profil
 }
 
 export function dropProfileTile(layout: ProfileLayout, from: number, to: number, group: boolean, folderID: string): ProfileLayout {
-	if (!Number.isInteger(from) || !Number.isInteger(to) || from < 0 || to < 0 || to > layout.length + 3) {
+	if (!Number.isInteger(from) || !Number.isInteger(to) || from < 0 || to < 0 || to >= layout.length) {
 		return(layout);
 	}
 	const source = layout[from];
@@ -73,9 +70,6 @@ export function dropProfileTile(layout: ProfileLayout, from: number, to: number,
 	}
 	const target = layout[to] ?? null;
 	const updated = [...layout];
-	while (updated.length <= to) {
-		updated.push(null);
-	}
 	if (group && source.kind === 'profile' && target !== null) {
 		if (target.kind === 'folder') {
 			updated[to] = { ...target, profiles: [...target.profiles, source.profileID] };
@@ -84,10 +78,10 @@ export function dropProfileTile(layout: ProfileLayout, from: number, to: number,
 		}
 		updated[from] = null;
 	} else {
-		updated[to] = source;
-		updated[from] = target;
+		updated.splice(from, 1);
+		updated.splice(to, 0, source);
 	}
-	return(updated);
+	return(updated.filter(function (slot) { return(slot !== null); }));
 }
 
 export function moveProfileOut(layout: ProfileLayout, folderID: string, profileID: ProfileID): ProfileLayout {
@@ -101,14 +95,9 @@ export function moveProfileOut(layout: ProfileLayout, folderID: string, profileI
 		}
 		const profiles = folder.profiles.filter(function (id): boolean { return(id !== profileID); });
 		return(profiles.length === 0 ? null : { ...folder, profiles: profiles });
-	});
-	const empty = updated.indexOf(null);
+	}).filter(function (slot) { return(slot !== null); });
 	const tile: ProfileTile = { kind: 'profile', profileID: profileID };
-	if (empty === -1) {
-		updated.push(tile);
-	} else {
-		updated[empty] = tile;
-	}
+	updated.push(tile);
 	return(updated);
 }
 
