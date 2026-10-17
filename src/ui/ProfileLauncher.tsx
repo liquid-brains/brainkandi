@@ -24,22 +24,18 @@ export function ProfileLauncher(props: {
 	const [folderID, setFolderID] = useState<string>();
 	const [folderName, setFolderName] = useState('');
 	const [drag, setDrag] = useState<Drag>();
-	const [selected, setSelected] = useState<number>();
 	const grid = useRef<View>(null);
 	const bounds = useRef({ x: 0, y: 0, width: 0, height: 0 });
 	const rows = useRef<ProfileRowBounds[]>([]);
 	const activeDrag = useRef<Drag | undefined>(undefined);
 	const folder = props.layout.find(function (slot): slot is ProfileFolder { return(slot?.kind === 'folder' && slot.id === folderID); });
 	const slots = folder === undefined ? props.layout.filter(function (slot) { return(slot !== null); }) : folder.profiles.map(function (id): ProfileTile { return({ kind: 'profile', profileID: id }); });
+	const hasHomeDropTarget = folder !== undefined;
 	const styles = makeStyles(props.colors);
 
 	useEffect(function () {
 		return(function (): void { props.onDragging(false); });
 	}, [props.onDragging]);
-
-	useEffect(function (): void {
-		setSelected(undefined);
-	}, [folderID, props.layout]);
 
 	function cancelDrag(): void {
 		activeDrag.current = undefined;
@@ -88,9 +84,8 @@ export function ProfileLauncher(props: {
 		}
 	}
 
-	function place(from: number, to: number, group: boolean): void {
-		changeSlots(dropProfileTile(slots, from, to, folder === undefined && group, createProfileID()));
-		setSelected(undefined);
+	function place(from: number, to: number): void {
+		changeSlots(dropProfileTile(slots, from, to));
 	}
 
 	function finishDrag(event: Parameters<typeof profileDragPosition>[0]): void {
@@ -102,9 +97,16 @@ export function ProfileLauncher(props: {
 		if (current === undefined || props.disabled) {
 			return;
 		}
-		const target = profileDropTarget(current, bounds.current, rows.current.slice(0, slots.length));
+		const target = profileDropTarget(current, bounds.current, rows.current.slice(0, slots.length + (hasHomeDropTarget ? 1 : 0)));
 		if (target !== undefined) {
-			place(current.from, target.index, target.group);
+			if (hasHomeDropTarget && target.index === 0) {
+				const source = slots[current.from];
+				if (source?.kind === 'profile') {
+					props.onChange(moveProfileOut(props.layout, folder!.id, source.profileID));
+				}
+			} else {
+				place(current.from, target.index - (hasHomeDropTarget ? 1 : 0));
+			}
 		}
 	}
 
@@ -116,9 +118,11 @@ export function ProfileLauncher(props: {
 	}
 
 	const draggedSlot = drag === undefined ? undefined : slots[drag.from];
-	const selectedSlot = selected === undefined ? undefined : slots[selected];
 	return(
 		<View>
+			{folder === undefined && <Button title="New folder" disabled={props.disabled} onPress={function (): void {
+				props.onChange([...props.layout, { kind: 'folder', id: createProfileID(), name: 'New folder', profiles: [] }]);
+			}} />}
 			{folder !== undefined && <View style={styles.controls}>
 				<Button title="Back to profiles" onPress={function (): void { cancelDrag(); setFolderID(undefined); }} />
 				<TextInput accessibilityLabel="Folder name" value={folderName} onChangeText={setFolderName} editable={!props.disabled} style={styles.input} />
@@ -127,13 +131,8 @@ export function ProfileLauncher(props: {
 				}} />
 			</View>}
 			<Text style={styles.help}>{folder === undefined
-				? 'Hold a profile or folder to drag it. Drop near the top or bottom of an item to reorder, or in its center to create or join a folder.'
-				: 'Hold a profile to drag and reorder it. To move a profile out of this folder, choose Move, then Move to home.'}</Text>
-			{selected !== undefined && <View style={styles.controls}>
-				<Text style={styles.help}>{folder === undefined ? 'Choose a destination. Use “Group here” to create or join a folder.' : 'Choose a destination, or move this profile to home.'}</Text>
-				<Button title="Cancel move" onPress={function (): void { setSelected(undefined); }} />
-				{folder !== undefined && selectedSlot?.kind === 'profile' && <Button title="Move to home" disabled={props.disabled} onPress={function (): void { props.onChange(moveProfileOut(props.layout, folder.id, selectedSlot.profileID)); }} />}
-			</View>}
+				? 'Hold a profile or folder to drag it. Drop it on a folder to move it there, or elsewhere to reorder.'
+				: 'Hold a profile to drag and reorder it. Drop it above the profiles to move it home.'}</Text>
 			<View
 				ref={grid}
 				style={styles.grid}
@@ -147,39 +146,41 @@ export function ProfileLauncher(props: {
 				onTouchCancel={cancelDrag}
 				onPointerUp={finishDrag}
 			>
+				{hasHomeDropTarget && <View style={styles.dropZone} onLayout={function (event): void {
+					const { y, height } = event.nativeEvent.layout;
+					rows.current[0] = { y: y, height: height };
+				}}>
+					<Text style={styles.help}>Drop here to move to profiles</Text>
+				</View>}
 				{slots.map(function (slot, index): React.JSX.Element {
 					const profile = slot.kind === 'profile' ? props.profiles.find(function (item): boolean { return(item.id === slot.profileID); }) : undefined;
 					return(
 						<View key={index} style={styles.cell} onLayout={function (event): void {
 							const { y, height } = event.nativeEvent.layout;
-							rows.current[index] = { y: y, height: height };
+							rows.current[index + (hasHomeDropTarget ? 1 : 0)] = { y: y, height: height };
 						}}>
 							<Pressable
-								accessibilityRole={slot.kind === 'folder' || selected !== undefined ? 'button' : undefined}
+								accessibilityRole={slot.kind === 'folder' ? 'button' : undefined}
 								accessibilityLabel={`${slot.kind === 'folder' ? 'Folder: ' : ''}${label(slot)}`}
-								accessibilityHint="Hold to drag, or use the Move button."
-								accessible={slot.kind === 'folder' || selected !== undefined}
+								accessibilityHint="Hold to drag."
+								accessible={slot.kind === 'folder'}
 								disabled={props.disabled}
 								delayLongPress={400}
 								onLongPress={function (event): void { startDrag(index, event); }}
 								onPress={function (): void {
 									if (activeDrag.current !== undefined) { return; }
-									if (selected !== undefined) {
-										place(selected, index, false);
-									} else if (slot.kind === 'folder') {
+									if (slot.kind === 'folder') {
 										setFolderID(slot.id);
 										setFolderName(slot.name);
 									}
 								}}
-								style={[styles.tile, (drag?.from === index || selected === index) && styles.moving]}
+								style={[styles.tile, drag?.from === index && styles.moving]}
 							>
 								{slot.kind === 'folder' ? <View style={styles.folder}>
 									<Text style={styles.name}>{slot.name}</Text>
 									<Text style={styles.help}>{slot.profiles.length} profiles</Text>
 								</View> : profile !== undefined && props.renderProfile(profile)}
 							</Pressable>
-							{selected === undefined && <Pressable accessibilityRole="button" accessibilityLabel={`Move ${label(slot)}`} disabled={props.disabled} onPress={function (): void { setSelected(index); }}><Text style={styles.move}>Move</Text></Pressable>}
-							{selected !== undefined && selected !== index && folder === undefined && selectedSlot?.kind === 'profile' && <Pressable accessibilityRole="button" accessibilityLabel={`Group in ${label(slot)}`} disabled={props.disabled} onPress={function (): void { place(selected, index, true); }}><Text style={styles.move}>Group here</Text></Pressable>}
 						</View>
 					);
 				})}
@@ -201,8 +202,8 @@ function makeStyles(colors: AppColors) {
 		moving: { opacity: 0.4, borderColor: colors.accent },
 		name: { color: colors.text, fontSize: 17, fontWeight: '700' },
 		help: { color: colors.text, fontSize: 12, marginVertical: 4 },
-		move: { color: colors.title, textAlign: 'center', padding: 4, textDecorationLine: 'underline' },
 		controls: { gap: 6, marginVertical: 8 },
+		dropZone: { minHeight: 40, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: colors.border, borderRadius: 6 },
 		input: { color: colors.inputText, backgroundColor: colors.surface, padding: 8, borderWidth: 1, borderColor: colors.border, borderRadius: 6 },
 		floating: { position: 'absolute', width: 90, height: 70, padding: 8, backgroundColor: colors.surface, borderWidth: 3, borderColor: colors.accent, borderRadius: 12, alignItems: 'center', justifyContent: 'center' }
 	}));

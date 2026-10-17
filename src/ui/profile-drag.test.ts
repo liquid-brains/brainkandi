@@ -16,13 +16,13 @@ describe('profile drag coordinates', function () {
 		expect(profileDragPosition({ nativeEvent: {} }, { x: 10, y: 200 }, { x: 40, y: 40 })).toEqual({ x: 40, y: 40 });
 	});
 
-	it('maps variable-height list rows to grouping at the center and reordering at vertical edges', function () {
+	it('maps drops to variable-height list rows regardless of vertical position', function () {
 		const bounds = { width: 300, height: 336 };
-		expect(profileDropTarget({ x: 150, y: 200 }, bounds, rows)).toEqual({ index: 1, group: true });
-		expect(profileDropTarget({ x: 5, y: 200 }, bounds, rows)).toEqual({ index: 1, group: true });
-		expect(profileDropTarget({ x: 150, y: 110 }, bounds, rows)).toEqual({ index: 1, group: false });
-		expect(profileDropTarget({ x: 150, y: 290 }, bounds, rows)).toEqual({ index: 1, group: false });
-		expect(profileDropTarget({ x: 150, y: 300 }, bounds, rows)).toEqual({ index: 2, group: false });
+		expect(profileDropTarget({ x: 150, y: 200 }, bounds, rows)).toEqual({ index: 1 });
+		expect(profileDropTarget({ x: 5, y: 200 }, bounds, rows)).toEqual({ index: 1 });
+		expect(profileDropTarget({ x: 150, y: 110 }, bounds, rows)).toEqual({ index: 1 });
+		expect(profileDropTarget({ x: 150, y: 290 }, bounds, rows)).toEqual({ index: 1 });
+		expect(profileDropTarget({ x: 150, y: 300 }, bounds, rows)).toEqual({ index: 2 });
 	});
 
 	it('does not target unmeasured rows or gaps between cards', function () {

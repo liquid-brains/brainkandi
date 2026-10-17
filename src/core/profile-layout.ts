@@ -30,7 +30,7 @@ export function decodeProfileLayout(serialized: string): ProfileLayout {
 			if (slot.kind === 'profile' && 'profileID' in slot) {
 				return({ kind: 'profile', profileID: profileID(slot.profileID) });
 			}
-			if (slot.kind === 'folder' && 'id' in slot && typeof slot.id === 'string' && slot.id !== '' && !folders.has(slot.id) && 'name' in slot && typeof slot.name === 'string' && slot.name.trim() !== '' && 'profiles' in slot && Array.isArray(slot.profiles) && slot.profiles.length > 0) {
+			if (slot.kind === 'folder' && 'id' in slot && typeof slot.id === 'string' && slot.id !== '' && !folders.has(slot.id) && 'name' in slot && typeof slot.name === 'string' && slot.name.trim() !== '' && 'profiles' in slot && Array.isArray(slot.profiles)) {
 				folders.add(slot.id);
 				return({ kind: 'folder', id: slot.id, name: slot.name.trim(), profiles: slot.profiles.map(profileID) });
 			}
@@ -52,7 +52,7 @@ export function reconcileProfileLayout(layout: ProfileLayout, profileIDs: Profil
 			return(keep(slot.profileID) ? slot : null);
 		}
 		const profiles = slot.profiles.filter(keep);
-		return(profiles.length === 0 ? null : { ...slot, profiles: profiles });
+		return({ ...slot, profiles: profiles });
 	}).filter(function (slot) { return(slot !== null); });
 	for (const id of remaining) {
 		updated.push({ kind: 'profile', profileID: id });
@@ -60,7 +60,7 @@ export function reconcileProfileLayout(layout: ProfileLayout, profileIDs: Profil
 	return(updated);
 }
 
-export function dropProfileTile(layout: ProfileLayout, from: number, to: number, group: boolean, folderID: string): ProfileLayout {
+export function dropProfileTile(layout: ProfileLayout, from: number, to: number): ProfileLayout {
 	if (!Number.isInteger(from) || !Number.isInteger(to) || from < 0 || to < 0 || to >= layout.length) {
 		return(layout);
 	}
@@ -70,12 +70,8 @@ export function dropProfileTile(layout: ProfileLayout, from: number, to: number,
 	}
 	const target = layout[to] ?? null;
 	const updated = [...layout];
-	if (group && source.kind === 'profile' && target !== null) {
-		if (target.kind === 'folder') {
-			updated[to] = { ...target, profiles: [...target.profiles, source.profileID] };
-		} else {
-			updated[to] = { kind: 'folder', id: folderID, name: 'New folder', profiles: [target.profileID, source.profileID] };
-		}
+	if (source.kind === 'profile' && target?.kind === 'folder') {
+		updated[to] = { ...target, profiles: [...target.profiles, source.profileID] };
 		updated[from] = null;
 	} else {
 		updated.splice(from, 1);
@@ -94,7 +90,7 @@ export function moveProfileOut(layout: ProfileLayout, folderID: string, profileI
 			return(slot);
 		}
 		const profiles = folder.profiles.filter(function (id): boolean { return(id !== profileID); });
-		return(profiles.length === 0 ? null : { ...folder, profiles: profiles });
+		return({ ...folder, profiles: profiles });
 	}).filter(function (slot) { return(slot !== null); });
 	const tile: ProfileTile = { kind: 'profile', profileID: profileID };
 	updated.push(tile);

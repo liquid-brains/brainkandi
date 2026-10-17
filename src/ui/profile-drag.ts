@@ -11,7 +11,7 @@ export function profileDragPosition(event: DragEvent, origin: Point, fallback: P
 	});
 }
 
-export function profileDropTarget(point: Point, bounds: { width: number; height: number }, rows: (ProfileRowBounds | undefined)[]): { index: number; group: boolean } | undefined {
+export function profileDropTarget(point: Point, bounds: { width: number; height: number }, rows: (ProfileRowBounds | undefined)[]): { index: number } | undefined {
 	if (!Number.isFinite(point.x) || !Number.isFinite(point.y) || bounds.width <= 0 || point.x < 0 || point.x >= bounds.width || point.y < 0 || point.y >= bounds.height) {
 		return(undefined);
 	}
@@ -20,9 +20,5 @@ export function profileDropTarget(point: Point, bounds: { width: number; height:
 	if (row === undefined) {
 		return(undefined);
 	}
-	const fraction = (point.y - row.y) / row.height;
-	return({
-		index: index,
-		group: fraction > 0.25 && fraction < 0.75
-	});
+	return({ index: index });
 }
