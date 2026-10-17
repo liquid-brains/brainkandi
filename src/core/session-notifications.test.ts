@@ -14,4 +14,15 @@ describe('session notifications', function () {
 		expect(notifications.cancelScheduledNotificationAsync).toHaveBeenCalledWith('notification-id');
 		expect(notifications.dismissNotificationAsync).toHaveBeenCalledWith('notification-id');
 	});
+
+	it('waits for both cleanup actions when one fails', async function () {
+		const notifications = {
+			cancelScheduledNotificationAsync: vi.fn().mockRejectedValue(new Error('Unable to cancel notification.')),
+			dismissNotificationAsync: vi.fn().mockResolvedValue(undefined)
+		};
+
+		await expect(clearSessionNotification('notification-id', notifications)).resolves.toBeUndefined();
+
+		expect(notifications.dismissNotificationAsync).toHaveBeenCalledWith('notification-id');
+	});
 });

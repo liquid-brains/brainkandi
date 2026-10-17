@@ -4,7 +4,7 @@ type NotificationCleaner = {
 };
 
 export async function clearSessionNotification(identifier: string, notifications: NotificationCleaner): Promise<void> {
-	await Promise.all([
+	await Promise.allSettled([
 		notifications.cancelScheduledNotificationAsync(identifier),
 		notifications.dismissNotificationAsync(identifier)
 	]);
