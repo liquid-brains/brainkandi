@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { profileDragPosition, profileDropTarget } from './profile-drag';
 
 describe('profile drag coordinates', function () {
+	const rows = [{ y: 0, height: 100 }, { y: 100, height: 200 }, { y: 300, height: 36 }];
 	it('uses release coordinates even when no move event arrived after responder handoff', function () {
 		expect(profileDragPosition({ nativeEvent: { pageX: 250, pageY: 450 } }, { x: 10, y: 200 }, { x: 40, y: 40 })).toEqual({ x: 240, y: 250 });
 	});
@@ -15,14 +16,22 @@ describe('profile drag coordinates', function () {
 		expect(profileDragPosition({ nativeEvent: {} }, { x: 10, y: 200 }, { x: 40, y: 40 })).toEqual({ x: 40, y: 40 });
 	});
 
-	it('maps the center of a tile to grouping and its edges to swapping', function () {
+	it('maps variable-height list rows to grouping at the center and reordering at vertical edges', function () {
 		const bounds = { width: 300, height: 336 };
-		expect(profileDropTarget({ x: 150, y: 130 }, bounds)).toEqual({ index: 4, group: true });
-		expect(profileDropTarget({ x: 105, y: 130 }, bounds)).toEqual({ index: 4, group: false });
-		expect(profileDropTarget({ x: 195, y: 130 }, bounds)).toEqual({ index: 4, group: false });
+		expect(profileDropTarget({ x: 150, y: 200 }, bounds, rows)).toEqual({ index: 1, group: true });
+		expect(profileDropTarget({ x: 5, y: 200 }, bounds, rows)).toEqual({ index: 1, group: true });
+		expect(profileDropTarget({ x: 150, y: 110 }, bounds, rows)).toEqual({ index: 1, group: false });
+		expect(profileDropTarget({ x: 150, y: 290 }, bounds, rows)).toEqual({ index: 1, group: false });
+		expect(profileDropTarget({ x: 150, y: 300 }, bounds, rows)).toEqual({ index: 2, group: false });
+	});
+
+	it('does not target unmeasured rows or gaps between cards', function () {
+		expect(profileDropTarget({ x: 150, y: 50 }, { width: 300, height: 100 }, [])).toBeUndefined();
+		expect(profileDropTarget({ x: 150, y: 50 }, { width: 300, height: 100 }, [undefined])).toBeUndefined();
+		expect(profileDropTarget({ x: 150, y: 50 }, { width: 300, height: 100 }, [{ y: 60, height: 40 }])).toBeUndefined();
 	});
 
 	it.each([{ x: -1, y: 0 }, { x: 300, y: 0 }, { x: 0, y: -1 }, { x: 0, y: 336 }, { x: NaN, y: 0 }, { x: 0, y: Infinity }])('cancels out-of-bounds drops at %s', function (point) {
-		expect(profileDropTarget(point, { width: 300, height: 336 })).toBeUndefined();
+		expect(profileDropTarget(point, { width: 300, height: 336 }, rows)).toBeUndefined();
 	});
 });
