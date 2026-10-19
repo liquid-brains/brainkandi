@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Button, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import type { GestureResponderEvent } from 'react-native';
 
 import { deleteProfileFolder, dropProfileTile, moveProfileOut } from '../core/profile-layout';
@@ -16,6 +16,7 @@ export function ProfileLauncher(props: {
 	profiles: StoredProfile[];
 	layout: ProfileLayout;
 	colors: AppColors;
+	buttonComponent: (props: { title: string; disabled?: boolean; onPress: () => void }) => React.JSX.Element;
 	disabled: boolean;
 	onChange: (layout: ProfileLayout) => void;
 	renderProfile: (profile: StoredProfile) => React.JSX.Element;
@@ -33,6 +34,7 @@ export function ProfileLauncher(props: {
 	const slots = folder === undefined ? props.layout.filter(function (slot) { return(slot !== null); }) : folder.profiles.map(function (id): ProfileTile { return({ kind: 'profile', profileID: id }); });
 	const hasHomeDropTarget = folder !== undefined;
 	const styles = makeStyles(props.colors);
+	const ButtonComponent = props.buttonComponent;
 
 	useEffect(function () {
 		return(function (): void { props.onDragging(false); });
@@ -121,11 +123,11 @@ export function ProfileLauncher(props: {
 	const draggedSlot = drag === undefined ? undefined : slots[drag.from];
 	return(
 		<View>
-			{folder === undefined && <Button title="New folder" disabled={props.disabled} onPress={function (): void {
+			{folder === undefined && <ButtonComponent title="New folder" disabled={props.disabled} onPress={function (): void {
 				props.onChange([...props.layout, { kind: 'folder', id: createProfileID(), name: 'New folder', profiles: [] }]);
 			}} />}
 			{folder !== undefined && <View style={styles.controls}>
-				<Button title="Back to profiles" onPress={function (): void { cancelDrag(); setFolderID(undefined); }} />
+				<ButtonComponent title="Back to profiles" onPress={function (): void { cancelDrag(); setFolderID(undefined); }} />
 			</View>}
 			<Text style={styles.help}>{folder === undefined
 				? 'Hold a profile or folder to drag it. Drop it on a folder to move it there, or elsewhere to reorder.'
@@ -181,16 +183,16 @@ export function ProfileLauncher(props: {
 							{folder === undefined && slot.kind === 'folder' && <View style={styles.folderActions}>
 								{renamingFolderID === slot.id ? <>
 									<TextInput accessibilityLabel="Folder name" value={folderName} onChangeText={setFolderName} editable={!props.disabled} style={styles.input} />
-									<Button title="Save folder name" disabled={props.disabled || folderName.trim() === ''} onPress={function (): void {
+									<ButtonComponent title="Save folder name" disabled={props.disabled || folderName.trim() === ''} onPress={function (): void {
 										props.onChange(props.layout.map(function (item) { return(item === slot ? { ...slot, name: folderName.trim() } : item); }));
 										setRenamingFolderID(undefined);
 									}} />
-									<Button title="Cancel rename" onPress={function (): void { setRenamingFolderID(undefined); }} />
-								</> : <Button title="Rename folder" disabled={props.disabled} onPress={function (): void {
+									<ButtonComponent title="Cancel rename" onPress={function (): void { setRenamingFolderID(undefined); }} />
+								</> : <ButtonComponent title="Rename folder" disabled={props.disabled} onPress={function (): void {
 									setFolderName(slot.name);
 									setRenamingFolderID(slot.id);
 								}} />}
-								<Button title="Delete folder" disabled={props.disabled} onPress={function (): void {
+								<ButtonComponent title="Delete folder" disabled={props.disabled} onPress={function (): void {
 									props.onChange(deleteProfileFolder(props.layout, slot.id));
 									setRenamingFolderID(undefined);
 								}} />
@@ -209,7 +211,7 @@ export function ProfileLauncher(props: {
 
 function makeStyles(colors: AppColors) {
 	return(StyleSheet.create({
-		grid: { position: 'relative' },
+		grid: { gap: 10, position: 'relative' },
 		cell: { width: '100%' },
 		tile: { width: '100%', userSelect: 'none' },
 		folder: { marginTop: 2, padding: 14, borderRadius: 8, backgroundColor: colors.surface },
