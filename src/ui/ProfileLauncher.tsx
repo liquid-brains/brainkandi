@@ -21,7 +21,7 @@ export function ProfileLauncher(props: {
 	onChange: (layout: ProfileLayout) => void;
 	renderProfile: (profile: StoredProfile) => React.JSX.Element;
 	onDragging: (dragging: boolean) => void;
-	onFolderChange: (folderName: string | undefined) => void;
+	onFolderChange: (folderID: string | undefined) => void;
 }): React.JSX.Element {
 	const [folderID, setFolderID] = useState<string>();
 	const [folderName, setFolderName] = useState('');
@@ -42,8 +42,8 @@ export function ProfileLauncher(props: {
 	}, [props.onDragging]);
 
 	useEffect(function () {
-		props.onFolderChange(folder?.name);
-	}, [folder?.name, props.onFolderChange]);
+		props.onFolderChange(folder?.id);
+	}, [folder?.id, props.onFolderChange]);
 
 	function cancelDrag(): void {
 		activeDrag.current = undefined;
