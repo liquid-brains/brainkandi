@@ -127,11 +127,8 @@ export function ProfileLauncher(props: {
 				props.onChange([...props.layout, { kind: 'folder', id: createProfileID(), name: 'New folder', profiles: [] }]);
 			}} />}
 			{folder !== undefined && <View style={styles.controls}>
-				<ButtonComponent title="Back to profiles" onPress={function (): void { cancelDrag(); setFolderID(undefined); }} />
+				<ButtonComponent title="Back" onPress={function (): void { cancelDrag(); setFolderID(undefined); }} />
 			</View>}
-			<Text style={styles.help}>{folder === undefined
-				? 'Hold a profile or folder to drag it. Drop it on a folder to move it there, or elsewhere to reorder.'
-				: 'Hold a profile to drag and reorder it. Drop it above the profiles to move it home.'}</Text>
 			<View
 				ref={grid}
 				style={styles.grid}

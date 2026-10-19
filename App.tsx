@@ -1350,7 +1350,6 @@ function ProfileEditorModal(props: {
 		if (props.values === undefined) {
 			return(
 				<Section title="Profile type">
-					<Text style={styles.help}>Choose the type of profile to create.</Text>
 					<View style={styles.profileTypeChoices}>
 						<Button title="New profile" onPress={function (): void { props.onSelectKind('random'); }} />
 						<Button title="New sequence" onPress={function (): void { props.onSelectKind('sequence'); }} />
