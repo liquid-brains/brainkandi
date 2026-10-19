@@ -615,6 +615,16 @@ export default function App(): React.JSX.Element {
 		}
 	}
 
+	async function duplicateProfile(profile: StoredProfile): Promise<void> {
+		try {
+			const copy = await profileStore.save({ ...profile.profile, name: `Copy of ${profile.profile.name}` });
+			await loadProfiles();
+			setStatus(`Created ${copy.profile.name}.`);
+		} catch (error) {
+			setStatus(errorMessage(error));
+		}
+	}
+
 	function openProfileEditor(profile: StoredProfile): void {
 		if (profile.profile.kind === 'ai' || profile.profile.kind === 'rest') {
 			setStatus('This profile type cannot be edited.');
@@ -855,6 +865,7 @@ export default function App(): React.JSX.Element {
 				<View style={styles.profileButtons}>
 					<Button title="Run" disabled={isRunning || item.profile.kind === 'ai' || validationErrors.length > 0 || sequenceError !== undefined} onPress={function (): void { runSavedProfile(item); }} />
 					<Button title="View / edit" disabled={isRunning} onPress={function (): void { openProfileEditor(item); }} />
+					<Button title="Make a copy" disabled={isRunning} onPress={function (): void { void duplicateProfile(item); }} />
 					<Button title="Export file" disabled={isRunning} onPress={function (): void { void exportProfile(item); }} />
 					<Button title="Delete" color="#75113d" disabled={isRunning} onPress={function (): void { void deleteProfile(item); }} />
 				</View>

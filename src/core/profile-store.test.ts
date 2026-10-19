@@ -67,3 +67,20 @@ describe('saving invalid random profiles', function () {
 		expect(randomParametersFromProfile(corrected).frequency.offPercentage).toBe(25);
 	});
 });
+
+describe('copying saved profiles', function () {
+	it('saves identical profile data under a new identifier', async function () {
+		const store = new AsyncStorageProfileStore();
+		const original = await store.save({
+			kind: 'file',
+			name: 'Session',
+			fileName: 'session.vnp0',
+			fileData: { modules: [{ module_no: 1 }] }
+		});
+		const copy = await store.save({ ...original.profile, name: `Copy of ${original.profile.name}` });
+
+		expect(copy.id).not.toBe(original.id);
+		expect(copy.profile).toEqual({ ...original.profile, name: 'Copy of Session' });
+		expect(await store.list()).toEqual([original, copy]);
+	});
+});
