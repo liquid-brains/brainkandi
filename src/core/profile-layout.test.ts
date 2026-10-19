@@ -9,13 +9,14 @@ vi.mock('@react-native-async-storage/async-storage', function () {
 	} });
 });
 
-import { AsyncStorageProfileLayoutStore, decodeProfileLayout, dropProfileTile, moveProfileOut, reconcileProfileLayout } from './profile-layout';
+import { AsyncStorageProfileLayoutStore, decodeProfileLayout, deleteProfileFolder, dropProfileTile, moveProfileOut, reconcileProfileLayout } from './profile-layout';
 import type { ProfileLayout, ProfileTile } from './profile-layout';
 import type { ProfileID } from './profiles';
 
 const a = 'a' as ProfileID;
 const b = 'b' as ProfileID;
 const c = 'c' as ProfileID;
+const d = 'd' as ProfileID;
 function tile(profileID: ProfileID): ProfileTile {
 	return({ kind: 'profile', profileID: profileID });
 }
@@ -70,6 +71,12 @@ describe('profile launcher layout', function () {
 		expect(moved).toEqual([{ kind: 'folder', id: 'folder', name: 'Favorites', profiles: [b] }, tile(a)]);
 		expect(moveProfileOut(moved, 'folder', b)).toEqual([{ kind: 'folder', id: 'folder', name: 'Favorites', profiles: [] }, tile(a), tile(b)]);
 		expect(moveProfileOut(layout, 'missing', a)).toBe(layout);
+	});
+
+	it('deletes folders while returning their profiles to the main layout', function () {
+		const layout: ProfileLayout = [tile(a), { kind: 'folder', id: 'folder', name: 'Favorites', profiles: [b, c] }, tile(d)];
+		expect(deleteProfileFolder(layout, 'folder')).toEqual([tile(a), tile(b), tile(c), tile(d)]);
+		expect(deleteProfileFolder(layout, 'missing')).toBe(layout);
 	});
 
 	it('persists newly created empty folders', async function () {
