@@ -350,6 +350,7 @@ export default function App(): React.JSX.Element {
 	const [isLoadingProfiles, setIsLoadingProfiles] = useState(true);
 	const [isSavingLayout, setIsSavingLayout] = useState(false);
 	const [isDraggingProfile, setIsDraggingProfile] = useState(false);
+	const [profileFolderName, setProfileFolderName] = useState<string>();
 	const [journeys, setJourneys] = useState<Journey[]>([]);
 	const [isJournalBrowserOpen, setIsJournalBrowserOpen] = useState(false);
 	const [journalSort, setJournalSort] = useState<JournalSort>('newest');
@@ -955,7 +956,7 @@ export default function App(): React.JSX.Element {
 						<Text style={styles.activeDevice}>Device: {deviceAddress}</Text>
 						{renderStopSessionButton()}
 
-						<Section title="Profiles">
+						<Section title={profileFolderName ?? 'Profiles'}>
 							<Button title="New profile" disabled={isRunning || isLoadingProfiles || isSavingLayout} onPress={openProfileCreation} />
 							<Button title="Import profile file" disabled={isRunning || isLoadingProfiles || isSavingLayout} onPress={function (): void { void importProfileFile(); }} />
 							<ProfileLauncher
@@ -967,6 +968,7 @@ export default function App(): React.JSX.Element {
 								onChange={function (layout): void { void saveProfileLayout(layout); }}
 								renderProfile={renderProfile}
 								onDragging={setIsDraggingProfile}
+								onFolderChange={setProfileFolderName}
 							/>
 							{renderEmptyProfiles()}
 						</Section>
