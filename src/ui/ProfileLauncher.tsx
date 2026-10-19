@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Button, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import type { GestureResponderEvent } from 'react-native';
 
 import { dropProfileTile, moveProfileOut } from '../core/profile-layout';
@@ -16,6 +16,7 @@ export function ProfileLauncher(props: {
 	profiles: StoredProfile[];
 	layout: ProfileLayout;
 	colors: AppColors;
+	buttonComponent: (props: { title: string; disabled?: boolean; onPress: () => void }) => React.JSX.Element;
 	disabled: boolean;
 	onChange: (layout: ProfileLayout) => void;
 	renderProfile: (profile: StoredProfile) => React.JSX.Element;
@@ -32,6 +33,7 @@ export function ProfileLauncher(props: {
 	const slots = folder === undefined ? props.layout.filter(function (slot) { return(slot !== null); }) : folder.profiles.map(function (id): ProfileTile { return({ kind: 'profile', profileID: id }); });
 	const hasHomeDropTarget = folder !== undefined;
 	const styles = makeStyles(props.colors);
+	const ButtonComponent = props.buttonComponent;
 
 	useEffect(function () {
 		return(function (): void { props.onDragging(false); });
@@ -120,13 +122,13 @@ export function ProfileLauncher(props: {
 	const draggedSlot = drag === undefined ? undefined : slots[drag.from];
 	return(
 		<View>
-			{folder === undefined && <Button title="New folder" disabled={props.disabled} onPress={function (): void {
+			{folder === undefined && <ButtonComponent title="New folder" disabled={props.disabled} onPress={function (): void {
 				props.onChange([...props.layout, { kind: 'folder', id: createProfileID(), name: 'New folder', profiles: [] }]);
 			}} />}
 			{folder !== undefined && <View style={styles.controls}>
-				<Button title="Back to profiles" onPress={function (): void { cancelDrag(); setFolderID(undefined); }} />
+				<ButtonComponent title="Back to profiles" onPress={function (): void { cancelDrag(); setFolderID(undefined); }} />
 				<TextInput accessibilityLabel="Folder name" value={folderName} onChangeText={setFolderName} editable={!props.disabled} style={styles.input} />
-				<Button title="Rename folder" disabled={props.disabled || folderName.trim() === ''} onPress={function (): void {
+				<ButtonComponent title="Rename folder" disabled={props.disabled || folderName.trim() === ''} onPress={function (): void {
 					props.onChange(props.layout.map(function (slot) { return(slot === folder ? { ...folder, name: folderName.trim() } : slot); }));
 				}} />
 			</View>}

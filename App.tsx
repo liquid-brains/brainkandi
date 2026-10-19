@@ -951,6 +951,7 @@ export default function App(): React.JSX.Element {
 								profiles={profiles}
 								layout={profileLayout}
 								colors={colors}
+								buttonComponent={Button}
 								disabled={isRunning || isLoadingProfiles || isSavingLayout}
 								onChange={function (layout): void { void saveProfileLayout(layout); }}
 								renderProfile={renderProfile}
