@@ -690,7 +690,7 @@ export default function App(): React.JSX.Element {
 		if (kind === 'file') {
 			setProfileEditor({
 				kind: 'file',
-				name: 'My file session',
+				name: 'My file',
 				description: '',
 				fileName: 'tmp1.vnp0',
 				fileJSON: defaultFileProfileJSON,
@@ -700,7 +700,7 @@ export default function App(): React.JSX.Element {
 			});
 			return;
 		}
-		let name = 'My random session';
+		let name = 'My profile';
 		if (kind === 'sequence') {
 			name = 'My sequence';
 		}
