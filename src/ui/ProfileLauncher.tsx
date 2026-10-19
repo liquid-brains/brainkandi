@@ -190,11 +190,11 @@ export function ProfileLauncher(props: {
 										setRenamingFolderID(undefined);
 									}} />
 									<ButtonComponent title="Cancel rename" onPress={function (): void { setRenamingFolderID(undefined); }} />
-								</> : <ButtonComponent title="Rename folder" disabled={props.disabled} onPress={function (): void {
+								</> : <ButtonComponent title="Rename" disabled={props.disabled} onPress={function (): void {
 									setFolderName(slot.name);
 									setRenamingFolderID(slot.id);
 								}} />}
-								<ButtonComponent title="Delete folder" color="#75113d" disabled={props.disabled} onPress={function (): void {
+								<ButtonComponent title="Delete" color="#75113d" disabled={props.disabled} onPress={function (): void {
 									props.onChange(deleteProfileFolder(props.layout, slot.id));
 									setRenamingFolderID(undefined);
 								}} />
