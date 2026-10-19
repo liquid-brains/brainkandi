@@ -12,6 +12,7 @@ describe('random profile editor', function () {
 			frequency: {
 				ranges: [{ min: 10, max: 20 }, { min: 40 }],
 				offPercentage: 10,
+				distributeRanges: true,
 				perChannel: true
 			},
 			coupling: { min: 5, max: 10, distribution: 25 },
@@ -27,8 +28,18 @@ describe('random profile editor', function () {
 
 		expect(parameters.frequency.ranges).toEqual([{ min: 10 }]);
 		expect(parameters.frequency.offPercentage).toBe(0);
+		expect(parameters.frequency.distributeRanges).toBeUndefined();
 		expect(parameters.abCoupling).toBeUndefined();
 		expect(formValuesFromRandomParameters(parameters).abCouplingDistribution).toBe('');
+	});
+
+	it('defaults range distribution off and preserves its setting when editing', function () {
+		expect(defaultFormValues.distributeRanges).toBe(false);
+		const form = { ...defaultFormValues, distributeRanges: true };
+		const parameters = randomParametersFromForm(form);
+
+		expect(parameters.frequency.distributeRanges).toBe(true);
+		expect(formValuesFromRandomParameters(parameters)).toEqual(form);
 	});
 
 	it('supports all channels off without adding an off range', function () {

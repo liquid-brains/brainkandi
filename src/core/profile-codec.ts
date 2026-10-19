@@ -67,6 +67,9 @@ function decodeRandomParameters(value: unknown, allowLegacy: boolean): RandomSes
 		if (typeof value.frequency.perChannel !== 'undefined' && typeof value.frequency.perChannel !== 'boolean') {
 			throw(new Error('Random profile frequency per-channel setting is invalid.'));
 		}
+		if (typeof value.frequency.distributeRanges !== 'undefined' && typeof value.frequency.distributeRanges !== 'boolean') {
+			throw(new Error('Random profile frequency range distribution setting is invalid.'));
+		}
 		if (typeof value.power.perChannel !== 'undefined' && typeof value.power.perChannel !== 'boolean') {
 			throw(new Error('Random profile power per-channel setting is invalid.'));
 		}
@@ -99,6 +102,9 @@ function decodeRandomParameters(value: unknown, allowLegacy: boolean): RandomSes
 		}
 		if (typeof value.frequency.perChannel === 'boolean') {
 			parameters.frequency.perChannel = value.frequency.perChannel;
+		}
+		if (typeof value.frequency.distributeRanges === 'boolean') {
+			parameters.frequency.distributeRanges = value.frequency.distributeRanges;
 		}
 		if (typeof value.power.perChannel === 'boolean') {
 			parameters.power.perChannel = value.power.perChannel;
@@ -239,7 +245,7 @@ function decodeProfile(value: unknown, allowLegacyRandomParameters: boolean, seq
 			if ('parameters' in value || !isRandomFormValues(input)) {
 				throw(new Error('Random profile draft input is invalid.'));
 			}
-			return({ kind: 'random', name: value.name, ...description, ...advanced, input: input });
+			return({ kind: 'random', name: value.name, ...description, ...advanced, input: { ...input, distributeRanges: input.distributeRanges ?? false } });
 		}
 		return({ kind: 'random', name: value.name, ...description, ...advanced, parameters: decodeRandomParameters(value.parameters, allowLegacyRandomParameters) });
 	}
