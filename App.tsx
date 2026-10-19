@@ -32,7 +32,7 @@ import type { RandomSessionField } from '@liquid-brains/brainlight/lib/neuropro/
 import { AsyncStorageDeviceStore } from './src/core/device-store';
 import { AsyncStorageProfileStore } from './src/core/profile-store';
 import { addProfileToFolder, AsyncStorageProfileLayoutStore, reconcileProfileLayout } from './src/core/profile-layout';
-import type { ProfileLayout } from './src/core/profile-layout';
+import type { ProfileFolder, ProfileLayout } from './src/core/profile-layout';
 import { AsyncStorageJourneyStore, createJourneyID } from './src/core/journey-store';
 import { AsyncStorageSettingsStore, defaultSettings } from './src/core/settings-store';
 import type { AppSettings } from './src/core/settings-store';
@@ -966,7 +966,7 @@ export default function App(): React.JSX.Element {
 						<Text style={styles.activeDevice}>Device: {deviceAddress}</Text>
 						{renderStopSessionButton()}
 
-						<Section title={profileLayout.find(function (slot) { return(slot?.kind === 'folder' && slot.id === profileFolderID); })?.name ?? 'Profiles'}>
+						<Section title={profileLayout.find(function (slot): slot is ProfileFolder { return(slot?.kind === 'folder' && slot.id === profileFolderID); })?.name ?? 'Profiles'}>
 							<Button title="New profile" disabled={isRunning || isLoadingProfiles || isSavingLayout} onPress={openProfileCreation} />
 							<Button title="Import profile file" disabled={isRunning || isLoadingProfiles || isSavingLayout} onPress={function (): void { void importProfileFile(); }} />
 							<ProfileLauncher
