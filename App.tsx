@@ -955,7 +955,7 @@ export default function App(): React.JSX.Element {
 						<Text style={styles.activeDevice}>Device: {deviceAddress}</Text>
 						{renderStopSessionButton()}
 
-						<Section title="Saved profiles">
+						<Section title="Profiles">
 							<Button title="New profile" disabled={isRunning || isLoadingProfiles || isSavingLayout} onPress={openProfileCreation} />
 							<Button title="Import profile file" disabled={isRunning || isLoadingProfiles || isSavingLayout} onPress={function (): void { void importProfileFile(); }} />
 							<ProfileLauncher
