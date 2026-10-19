@@ -16,7 +16,7 @@ export function ProfileLauncher(props: {
 	profiles: StoredProfile[];
 	layout: ProfileLayout;
 	colors: AppColors;
-	buttonComponent: (props: { title: string; disabled?: boolean; onPress: () => void }) => React.JSX.Element;
+	buttonComponent: (props: { title: string; color?: string; disabled?: boolean; onPress: () => void }) => React.JSX.Element;
 	disabled: boolean;
 	onChange: (layout: ProfileLayout) => void;
 	renderProfile: (profile: StoredProfile) => React.JSX.Element;
@@ -156,7 +156,7 @@ export function ProfileLauncher(props: {
 				{slots.map(function (slot, index): React.JSX.Element {
 					const profile = slot.kind === 'profile' ? props.profiles.find(function (item): boolean { return(item.id === slot.profileID); }) : undefined;
 					return(
-						<View key={index} style={styles.cell} onLayout={function (event): void {
+						<View key={index} style={[styles.cell, slot.kind === 'folder' && styles.folderItem]} onLayout={function (event): void {
 							const { y, height } = event.nativeEvent.layout;
 							rows.current[index + (hasHomeDropTarget ? 1 : 0)] = { y: y, height: height };
 						}}>
@@ -175,7 +175,7 @@ export function ProfileLauncher(props: {
 										setFolderID(slot.id);
 									}
 								}}
-								style={[styles.tile, drag?.from === index && styles.moving]}
+								style={[styles.tile, slot.kind === 'folder' && styles.folderTile, drag?.from === index && styles.moving]}
 							>
 								{slot.kind === 'folder' ? <View style={styles.folder}>
 									<Text style={styles.name}>{slot.name}</Text>
@@ -194,7 +194,7 @@ export function ProfileLauncher(props: {
 									setFolderName(slot.name);
 									setRenamingFolderID(slot.id);
 								}} />}
-								<ButtonComponent title="Delete folder" disabled={props.disabled} onPress={function (): void {
+								<ButtonComponent title="Delete folder" color="#75113d" disabled={props.disabled} onPress={function (): void {
 									props.onChange(deleteProfileFolder(props.layout, slot.id));
 									setRenamingFolderID(undefined);
 								}} />
@@ -216,8 +216,10 @@ function makeStyles(colors: AppColors) {
 		grid: { gap: 10, position: 'relative' },
 		cell: { width: '100%' },
 		tile: { width: '100%', userSelect: 'none' },
-		folder: { marginTop: 2, padding: 14, borderRadius: 8, backgroundColor: colors.surface },
-		folderActions: { gap: 6, marginBottom: 8 },
+		folderItem: { alignItems: 'center', backgroundColor: colors.surface, borderRadius: 8, flexDirection: 'row', gap: 12, justifyContent: 'space-between', marginTop: 2, padding: 14 },
+		folderTile: { flex: 1, width: 'auto' },
+		folder: { flex: 1 },
+		folderActions: { gap: 6 },
 		moving: { opacity: 0.4, borderColor: colors.accent },
 		name: { color: colors.text, fontSize: 17, fontWeight: '700' },
 		help: { color: colors.text, fontSize: 12, marginVertical: 4 },
