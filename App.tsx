@@ -1446,6 +1446,11 @@ function ProfileEditorModal(props: {
 					);
 				})}
 				<Button title="Add frequency range" onPress={function (): void { updateRandomForm(function (form): FormValues { return({ ...form, frequencyRanges: [...form.frequencyRanges, { min: '', max: '' }] }); }); }} />
+				<View style={styles.settingRow}>
+					<Text style={styles.label}>Distribute frequency ranges</Text>
+					<Switch accessibilityLabel="Distribute frequency ranges" value={props.values.randomForm.distributeRanges} onValueChange={function (distributeRanges): void { updateRandomForm(function (form): FormValues { return({ ...form, distributeRanges: distributeRanges }); }); }} />
+				</View>
+				<Text style={styles.help}>Select a range first, then choose a frequency uniformly within it. Off by default, frequency selection is weighted across all values in all ranges.</Text>
 				<Button title={`Frequency randomization: ${props.values.randomForm.frequencyPerChannel ? 'per LED' : 'per session'}`} onPress={function (): void { updateRandomForm(function (form): FormValues { return({ ...form, frequencyPerChannel: !form.frequencyPerChannel }); }); }} />
 				<Field label="Power minimum" error={fieldError('power.min')} value={props.values.randomForm.powerMin} onChangeText={function (powerMin): void { updateRandomForm(function (form): FormValues { return({ ...form, powerMin: powerMin }); }); }} keyboardType="numeric" helpText="The lowest power value used during the session." />
 				<Field label="Power maximum (optional)" error={fieldError('power.max')} value={props.values.randomForm.powerMax} onChangeText={function (powerMax): void { updateRandomForm(function (form): FormValues { return({ ...form, powerMax: powerMax }); }); }} keyboardType="numeric" helpText="The highest power value available. Leave blank to use the power minimum throughout the session." />

@@ -6,6 +6,7 @@ export type FormValues = {
 	basename: string;
 	duration: string;
 	frequencyRanges: FrequencyRangeForm[];
+	distributeRanges: boolean;
 	frequencyPerChannel: boolean;
 	frequencyOffPercentage: string;
 	couplingMin: string;
@@ -26,6 +27,7 @@ export const defaultFormValues: FormValues = {
 	basename: 'random',
 	duration: '5',
 	frequencyRanges: [{ min: '10', max: '' }],
+	distributeRanges: false,
 	frequencyPerChannel: false,
 	frequencyOffPercentage: '0',
 	couplingMin: '',
@@ -43,6 +45,9 @@ export function isRandomFormValues(value: unknown): value is FormValues {
 	}
 	for (const [name, defaultValue] of Object.entries(defaultFormValues)) {
 		if (name === 'frequencyRanges') {
+			continue;
+		}
+		if (name === 'distributeRanges' && !(name in value)) {
 			continue;
 		}
 		if (!(name in value) || typeof Reflect.get(value, name) !== typeof defaultValue) {
@@ -104,6 +109,7 @@ function parseRandomForm(values: FormValues): { parameters: RandomSessionParamet
 				}
 				return(decodedRange);
 			}),
+			...(values.distributeRanges ? { distributeRanges: true } : {}),
 			offPercentage: offPercentage,
 			perChannel: values.frequencyPerChannel
 		},
@@ -196,6 +202,7 @@ export function formValuesFromRandomParameters(parameters: RandomSessionParamete
 			});
 		}),
 		frequencyPerChannel: parameters.frequency.perChannel ?? false,
+		distributeRanges: parameters.frequency.distributeRanges ?? false,
 		frequencyOffPercentage: String(parameters.frequency.offPercentage ?? 0),
 		couplingMin: parameters.coupling === undefined ? '' : String(parameters.coupling.min),
 		couplingMax: parameters.coupling?.max === undefined ? '' : String(parameters.coupling.max),
