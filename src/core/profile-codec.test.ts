@@ -132,6 +132,7 @@ describe('profile serialization', function () {
 				frequency: {
 					ranges: [{ min: 10, max: 20 }, { min: 40 }, { min: 99 }],
 					offPercentage: 10,
+					distributeRanges: true,
 					perChannel: true
 				},
 				abCoupling: { distribution: 0 },
@@ -321,6 +322,7 @@ describe('profile serialization', function () {
 
 	it('migrates locally saved draft frequency controls while keeping unfinished input', function () {
 		const { frequencyOffPercentage, ...legacyDefaults } = defaultFormValues;
+		const { distributeRanges, ...olderLegacyDefaults } = legacyDefaults;
 		const decoded = decapsulateProfiles(JSON.stringify({
 			version: 1,
 			profiles: [{
@@ -329,7 +331,7 @@ describe('profile serialization', function () {
 					kind: 'random',
 					name: 'Legacy draft',
 					input: {
-						...legacyDefaults,
+						...olderLegacyDefaults,
 						duration: '',
 						frequencyRanges: [
 							{ off: false, min: '', max: '20', weight: '75' },
