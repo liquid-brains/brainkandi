@@ -128,9 +128,11 @@ export function ProfileLauncher(props: {
 	const draggedSlot = drag === undefined ? undefined : slots[drag.from];
 	return(
 		<View>
-			{folder === undefined && <ButtonComponent title="New folder" disabled={props.disabled} onPress={function (): void {
-				props.onChange([...props.layout, { kind: 'folder', id: createProfileID(), name: 'New folder', profiles: [] }]);
-			}} />}
+			{folder === undefined && <View style={styles.newFolder}>
+				<ButtonComponent title="New folder" disabled={props.disabled} onPress={function (): void {
+					props.onChange([...props.layout, { kind: 'folder', id: createProfileID(), name: 'New folder', profiles: [] }]);
+				}} />
+			</View>}
 			{folder !== undefined && <View style={styles.controls}>
 				<ButtonComponent title="Back" onPress={function (): void { cancelDrag(); setFolderID(undefined); }} />
 			</View>}
@@ -214,6 +216,7 @@ export function ProfileLauncher(props: {
 function makeStyles(colors: AppColors) {
 	return(StyleSheet.create({
 		grid: { gap: 10, position: 'relative' },
+		newFolder: { marginBottom: 10 },
 		cell: { width: '100%' },
 		tile: { width: '100%', userSelect: 'none' },
 		folderItem: { alignItems: 'center', backgroundColor: colors.surface, borderRadius: 8, flexDirection: 'row', gap: 12, justifyContent: 'space-between', marginTop: 2, padding: 14 },
@@ -223,7 +226,7 @@ function makeStyles(colors: AppColors) {
 		moving: { opacity: 0.4, borderColor: colors.accent },
 		name: { color: colors.text, fontSize: 17, fontWeight: '700' },
 		help: { color: colors.text, fontSize: 12, marginVertical: 4 },
-		controls: { gap: 6, marginVertical: 8 },
+		controls: { gap: 6, marginBottom: 8 },
 		dropZone: { minHeight: 40, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: colors.border, borderRadius: 6 },
 		input: { color: colors.inputText, backgroundColor: colors.surface, padding: 8, borderWidth: 1, borderColor: colors.border, borderRadius: 6 },
 		floating: { position: 'absolute', width: 90, height: 70, padding: 8, backgroundColor: colors.surface, borderWidth: 3, borderColor: colors.accent, borderRadius: 12, alignItems: 'center', justifyContent: 'center' }
