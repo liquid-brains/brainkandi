@@ -1465,21 +1465,29 @@ function ProfileEditorModal(props: {
 					);
 				})}
 				<View style={styles.actionHelpRow}>
-					<Button title="Add frequency range" onPress={function (): void { updateRandomForm(function (form): FormValues { return({ ...form, frequencyRanges: [...form.frequencyRanges, { min: '', max: '' }] }); }); }} />
+					<View style={styles.actionHelpButton}>
+						<Button title="Add frequency range" onPress={function (): void { updateRandomForm(function (form): FormValues { return({ ...form, frequencyRanges: [...form.frequencyRanges, { min: '', max: '' }] }); }); }} />
+					</View>
 					<FieldHelp label="Add frequency range" helpText="Adds another minimum and optional maximum frequency range. Frequencies can then be selected from all configured ranges." />
 				</View>
-				<View style={styles.settingRow}>
-					<Button title={`Distribute frequency ranges: ${props.values.randomForm.distributeRanges ? 'on' : 'off'}`} onPress={function (): void { updateRandomForm(function (form): FormValues { return({ ...form, distributeRanges: !form.distributeRanges }); }); }} />
+				<View style={styles.actionHelpRow}>
+					<View style={styles.actionHelpButton}>
+						<Button title={`Distribute frequency ranges: ${props.values.randomForm.distributeRanges ? 'on' : 'off'}`} onPress={function (): void { updateRandomForm(function (form): FormValues { return({ ...form, distributeRanges: !form.distributeRanges }); }); }} />
+					</View>
 					<FieldHelp label="Distribute frequency ranges" helpText="Select a range first, then choose a frequency uniformly within it. Off by default, frequency selection is weighted across all values in all ranges." />
 				</View>
 				<View style={styles.actionHelpRow}>
-					<Button title={`Frequency randomization: ${props.values.randomForm.frequencyPerChannel ? 'per LED' : 'per session'}`} onPress={function (): void { updateRandomForm(function (form): FormValues { return({ ...form, frequencyPerChannel: !form.frequencyPerChannel }); }); }} />
+					<View style={styles.actionHelpButton}>
+						<Button title={`Frequency randomization: ${props.values.randomForm.frequencyPerChannel ? 'per LED' : 'per session'}`} onPress={function (): void { updateRandomForm(function (form): FormValues { return({ ...form, frequencyPerChannel: !form.frequencyPerChannel }); }); }} />
+					</View>
 					<FieldHelp label="Frequency randomization" helpText="Choose a frequency independently for each LED, or use one frequency for the whole session." />
 				</View>
 				<Field label="Power minimum" error={fieldError('power.min')} value={props.values.randomForm.powerMin} onChangeText={function (powerMin): void { updateRandomForm(function (form): FormValues { return({ ...form, powerMin: powerMin }); }); }} keyboardType="numeric" helpText="The lowest power value used during the session." />
 				<Field label="Power maximum (optional)" error={fieldError('power.max')} value={props.values.randomForm.powerMax} onChangeText={function (powerMax): void { updateRandomForm(function (form): FormValues { return({ ...form, powerMax: powerMax }); }); }} keyboardType="numeric" helpText="The highest power value available. Leave blank to use the power minimum throughout the session." />
 				<View style={styles.actionHelpRow}>
-					<Button title={`Power randomization: ${props.values.randomForm.powerPerChannel ? 'per LED' : 'per session'}`} onPress={function (): void { updateRandomForm(function (form): FormValues { return({ ...form, powerPerChannel: !form.powerPerChannel }); }); }} />
+					<View style={styles.actionHelpButton}>
+						<Button title={`Power randomization: ${props.values.randomForm.powerPerChannel ? 'per LED' : 'per session'}`} onPress={function (): void { updateRandomForm(function (form): FormValues { return({ ...form, powerPerChannel: !form.powerPerChannel }); }); }} />
+					</View>
 					<FieldHelp label="Power randomization" helpText="Choose power independently for each LED, or use one power value for the whole session." />
 				</View>
 				{props.values.advanced && <>
@@ -1583,6 +1591,7 @@ function createStyles(colors: AppColors) {
 	settingsHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
 	settingRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 16 },
 	actionHelpRow: { alignItems: 'center', flexDirection: 'row', gap: 8 },
+	actionHelpButton: { flex: 1 },
 	activeDevice: { color: colors.onBackground },
 	keyboardAvoidingView: { flex: 1 },
 	keyboardAvoidingModal: { flex: 1, gap: 16 },
