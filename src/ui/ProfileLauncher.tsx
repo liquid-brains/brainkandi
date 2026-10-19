@@ -197,7 +197,7 @@ export function ProfileLauncher(props: {
 
 function makeStyles(colors: AppColors) {
 	return(StyleSheet.create({
-		grid: { position: 'relative' },
+		grid: { gap: 10, position: 'relative' },
 		cell: { width: '100%' },
 		tile: { width: '100%', userSelect: 'none' },
 		folder: { marginTop: 2, padding: 14, borderRadius: 8, backgroundColor: colors.surface },
