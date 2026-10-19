@@ -5,6 +5,7 @@ import type { RandomProfile, RandomSessionParameters } from './profiles';
 export type FormValues = {
 	basename: string;
 	duration: string;
+	sessionDuration: string;
 	frequencyRanges: FrequencyRangeForm[];
 	distributeRanges: boolean;
 	frequencyPerChannel: boolean;
@@ -26,6 +27,7 @@ export type FrequencyRangeForm = {
 export const defaultFormValues: FormValues = {
 	basename: 'random',
 	duration: '5',
+	sessionDuration: '1',
 	frequencyRanges: [{ min: '10', max: '' }],
 	distributeRanges: false,
 	frequencyPerChannel: false,
@@ -94,6 +96,7 @@ function parseRandomForm(values: FormValues): { parameters: RandomSessionParamet
 	const abCouplingDistribution = optionalNumber(values.abCouplingDistribution, 'abCoupling.distribution', errors);
 	const powerMax = optionalNumber(values.powerMax, 'power.max', errors);
 	const offPercentage = optionalNumber(values.frequencyOffPercentage, 'frequency.offPercentage', errors) ?? 0;
+	const sessionDuration = optionalNumber(values.sessionDuration, 'sessionDuration', errors);
 	if (couplingMax !== undefined && couplingMin === undefined) {
 		errors.push(new BrainlightError('Cross-coupling minimum is required when its maximum is set.', 'coupling.min'));
 		couplingMin = NaN;
@@ -118,6 +121,9 @@ function parseRandomForm(values: FormValues): { parameters: RandomSessionParamet
 			perChannel: values.powerPerChannel
 		}
 	};
+	if (sessionDuration !== undefined) {
+		parameters.sessionDuration = sessionDuration;
+	}
 	parameters.basename = values.basename.trim();
 	if (powerMax !== undefined) {
 		parameters.power.max = powerMax;
@@ -195,6 +201,7 @@ export function formValuesFromRandomParameters(parameters: RandomSessionParamete
 	return({
 		basename: parameters.basename ?? 'random',
 		duration: String(parameters.duration),
+		sessionDuration: String(parameters.sessionDuration ?? 1),
 		frequencyRanges: parameters.frequency.ranges.map(function (range): FrequencyRangeForm {
 			return({
 				min: String(range.min),

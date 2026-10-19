@@ -78,6 +78,10 @@ function decodeRandomParameters(value: unknown, allowLegacy: boolean): RandomSes
 			frequency: { ranges: ranges },
 			power: { min: value.power.min }
 		};
+		const sessionDuration = optionalNumber(value.sessionDuration, 'session duration');
+		if (sessionDuration !== undefined) {
+			parameters.sessionDuration = sessionDuration;
+		}
 		const offPercentage = optionalNumber(value.frequency.offPercentage, 'off percentage');
 		if (offPercentage !== undefined) {
 			parameters.frequency.offPercentage = offPercentage;
@@ -144,6 +148,10 @@ function decodeRandomParameters(value: unknown, allowLegacy: boolean): RandomSes
 		frequency: { ranges: [{ min: value.freqMin }] },
 		power: { min: value.powerMin }
 	};
+	const sessionDuration = optionalNumber(value.sessionDuration, 'session duration');
+	if (sessionDuration !== undefined) {
+		parameters.sessionDuration = sessionDuration;
+	}
 	const freqMaximum = optionalNumber(value.freqMax, 'freqMax');
 	const powerMaximum = optionalNumber(value.powerMax, 'powerMax');
 	const couplingMinimum = optionalNumber(value.couplingMin, 'couplingMin');
@@ -241,6 +249,9 @@ function decodeProfile(value: unknown, allowLegacyRandomParameters: boolean, seq
 					ranges.push({ min: '10', max: '' });
 				}
 				input = { ...input, frequencyRanges: ranges, frequencyOffPercentage: offPercentage };
+			}
+			if (isRecord(input) && !('sessionDuration' in input)) {
+				input = { ...input, sessionDuration: '1' };
 			}
 			if ('parameters' in value || !isRandomFormValues(input)) {
 				throw(new Error('Random profile draft input is invalid.'));
