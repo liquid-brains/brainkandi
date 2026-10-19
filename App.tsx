@@ -31,8 +31,8 @@ import { BrainlightError } from '@liquid-brains/brainlight/lib/neuropro/index.js
 import type { RandomSessionField } from '@liquid-brains/brainlight/lib/neuropro/index.js';
 import { AsyncStorageDeviceStore } from './src/core/device-store';
 import { AsyncStorageProfileStore } from './src/core/profile-store';
-import { AsyncStorageProfileLayoutStore, reconcileProfileLayout } from './src/core/profile-layout';
-import type { ProfileLayout } from './src/core/profile-layout';
+import { addProfileToFolder, AsyncStorageProfileLayoutStore, reconcileProfileLayout } from './src/core/profile-layout';
+import type { ProfileFolder, ProfileLayout } from './src/core/profile-layout';
 import { AsyncStorageJourneyStore, createJourneyID } from './src/core/journey-store';
 import { AsyncStorageSettingsStore, defaultSettings } from './src/core/settings-store';
 import type { AppSettings } from './src/core/settings-store';
@@ -350,7 +350,7 @@ export default function App(): React.JSX.Element {
 	const [isLoadingProfiles, setIsLoadingProfiles] = useState(true);
 	const [isSavingLayout, setIsSavingLayout] = useState(false);
 	const [isDraggingProfile, setIsDraggingProfile] = useState(false);
-	const [profileFolderName, setProfileFolderName] = useState<string>();
+	const [profileFolderID, setProfileFolderID] = useState<string>();
 	const [journeys, setJourneys] = useState<Journey[]>([]);
 	const [isJournalBrowserOpen, setIsJournalBrowserOpen] = useState(false);
 	const [journalSort, setJournalSort] = useState<JournalSort>('newest');
@@ -411,18 +411,28 @@ export default function App(): React.JSX.Element {
 		}
 	}
 
-	const loadProfiles = useCallback(async function (): Promise<void> {
+	const loadProfiles = useCallback(async function (newProfileFolder?: { folderID: string; profileID: ProfileID }): Promise<void> {
 		setIsLoadingProfiles(true);
 		try {
 			const loaded = await profileStore.list();
 			setProfiles(loaded);
 			const ids = loaded.map(function (item): ProfileID { return(item.id); });
+			let layout: ProfileLayout;
 			try {
-				setProfileLayout(reconcileProfileLayout(await profileLayoutStore.load(), ids));
+				layout = reconcileProfileLayout(await profileLayoutStore.load(), ids);
 			} catch (error) {
-				setProfileLayout(reconcileProfileLayout([], ids));
+				layout = reconcileProfileLayout([], ids);
 				setStatus(errorMessage(error));
 			}
+			if (newProfileFolder !== undefined) {
+				layout = addProfileToFolder(layout, newProfileFolder.folderID, newProfileFolder.profileID);
+				try {
+					await profileLayoutStore.save(layout);
+				} catch (error) {
+					setStatus(errorMessage(error));
+				}
+			}
+			setProfileLayout(layout);
 		} catch (error) {
 			setStatus(errorMessage(error));
 		} finally {
@@ -719,8 +729,8 @@ export default function App(): React.JSX.Element {
 		}
 		try {
 			const profile = profileFromEditorValues(profileEditor);
-			await profileStore.save(profile);
-			await loadProfiles();
+			const saved = await profileStore.save(profile);
+			await loadProfiles(profileFolderID === undefined ? undefined : { folderID: profileFolderID, profileID: saved.id });
 			closeProfileDocumentModal();
 			setStatus(`Saved ${profile.name}.`);
 		} catch (error) {
@@ -956,7 +966,7 @@ export default function App(): React.JSX.Element {
 						<Text style={styles.activeDevice}>Device: {deviceAddress}</Text>
 						{renderStopSessionButton()}
 
-						<Section title={profileFolderName ?? 'Profiles'}>
+						<Section title={profileLayout.find(function (slot): slot is ProfileFolder { return(slot?.kind === 'folder' && slot.id === profileFolderID); })?.name ?? 'Profiles'}>
 							<Button title="New profile" disabled={isRunning || isLoadingProfiles || isSavingLayout} onPress={openProfileCreation} />
 							<Button title="Import profile file" disabled={isRunning || isLoadingProfiles || isSavingLayout} onPress={function (): void { void importProfileFile(); }} />
 							<ProfileLauncher
@@ -968,7 +978,7 @@ export default function App(): React.JSX.Element {
 								onChange={function (layout): void { void saveProfileLayout(layout); }}
 								renderProfile={renderProfile}
 								onDragging={setIsDraggingProfile}
-								onFolderChange={setProfileFolderName}
+								onFolderChange={setProfileFolderID}
 							/>
 							{renderEmptyProfiles()}
 						</Section>

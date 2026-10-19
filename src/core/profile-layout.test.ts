@@ -9,7 +9,7 @@ vi.mock('@react-native-async-storage/async-storage', function () {
 	} });
 });
 
-import { AsyncStorageProfileLayoutStore, decodeProfileLayout, deleteProfileFolder, dropProfileTile, moveProfileOut, reconcileProfileLayout } from './profile-layout';
+import { addProfileToFolder, AsyncStorageProfileLayoutStore, decodeProfileLayout, deleteProfileFolder, dropProfileTile, moveProfileOut, reconcileProfileLayout } from './profile-layout';
 import type { ProfileLayout, ProfileTile } from './profile-layout';
 import type { ProfileID } from './profiles';
 
@@ -71,6 +71,21 @@ describe('profile launcher layout', function () {
 		expect(moved).toEqual([{ kind: 'folder', id: 'folder', name: 'Favorites', profiles: [b] }, tile(a)]);
 		expect(moveProfileOut(moved, 'folder', b)).toEqual([{ kind: 'folder', id: 'folder', name: 'Favorites', profiles: [] }, tile(a), tile(b)]);
 		expect(moveProfileOut(layout, 'missing', a)).toBe(layout);
+	});
+
+	it('adds newly created profiles to the folder that was open during creation', function () {
+		const layout: ProfileLayout = [tile(a), { kind: 'folder', id: 'folder', name: 'Favorites', profiles: [b] }, tile(c)];
+		expect(addProfileToFolder(layout, 'folder', d)).toEqual([
+			tile(a),
+			{ kind: 'folder', id: 'folder', name: 'Favorites', profiles: [b, d] },
+			tile(c)
+		]);
+		expect(addProfileToFolder([tile(d), ...layout], 'folder', d)).toEqual([
+			tile(a),
+			{ kind: 'folder', id: 'folder', name: 'Favorites', profiles: [b, d] },
+			tile(c)
+		]);
+		expect(addProfileToFolder(layout, 'missing', d)).toBe(layout);
 	});
 
 	it('deletes folders while returning their profiles to the main layout', function () {

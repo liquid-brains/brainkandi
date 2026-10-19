@@ -97,6 +97,24 @@ export function moveProfileOut(layout: ProfileLayout, folderID: string, profileI
 	return(updated);
 }
 
+export function addProfileToFolder(layout: ProfileLayout, folderID: string, profileID: ProfileID): ProfileLayout {
+	if (!layout.some(function (slot): boolean { return(slot?.kind === 'folder' && slot.id === folderID); })) {
+		return(layout);
+	}
+	return(layout.flatMap(function (slot): ProfileTile | ProfileFolder | [] {
+		if (slot === null || (slot.kind === 'profile' && slot.profileID === profileID)) {
+			return([]);
+		}
+		if (slot.kind === 'folder') {
+			const profiles = slot.id === folderID
+				? slot.profiles.includes(profileID) ? slot.profiles : [...slot.profiles, profileID]
+				: slot.profiles.filter(function (id): boolean { return(id !== profileID); });
+			return({ ...slot, profiles: profiles });
+		}
+		return(slot);
+	}));
+}
+
 export function deleteProfileFolder(layout: ProfileLayout, folderID: string): ProfileLayout {
 	const folder = layout.find(function (slot): boolean { return(slot?.kind === 'folder' && slot.id === folderID); });
 	if (folder?.kind !== 'folder') {
