@@ -1180,6 +1180,13 @@ function Field(props: {
 	);
 }
 
+function FieldHelp(props: { label: string; helpText: string }): React.JSX.Element {
+	const { styles, useLiquidGlassButtons } = useContext(ThemeContext);
+	const [isShowingHelp, setIsShowingHelp] = useState(false);
+
+	return(<>{renderFieldHelp(props.label, props.helpText, isShowingHelp, setIsShowingHelp, styles, useLiquidGlassButtons)}</>);
+}
+
 function renderFieldHelp(label: string, helpText: string | undefined, isShowingHelp: boolean, setIsShowingHelp: (visible: boolean) => void, styles: ReturnType<typeof createStyles>, useLiquidGlassButtons: boolean): React.ReactNode {
 	if (helpText === undefined) {
 		return(null);
@@ -1447,10 +1454,9 @@ function ProfileEditorModal(props: {
 				})}
 				<Button title="Add frequency range" onPress={function (): void { updateRandomForm(function (form): FormValues { return({ ...form, frequencyRanges: [...form.frequencyRanges, { min: '', max: '' }] }); }); }} />
 				<View style={styles.settingRow}>
-					<Text style={styles.label}>Distribute frequency ranges</Text>
-					<Switch accessibilityLabel="Distribute frequency ranges" value={props.values.randomForm.distributeRanges} onValueChange={function (distributeRanges): void { updateRandomForm(function (form): FormValues { return({ ...form, distributeRanges: distributeRanges }); }); }} />
+					<Button title={`Distribute frequency ranges: ${props.values.randomForm.distributeRanges ? 'on' : 'off'}`} onPress={function (): void { updateRandomForm(function (form): FormValues { return({ ...form, distributeRanges: !form.distributeRanges }); }); }} />
+					<FieldHelp label="Distribute frequency ranges" helpText="Select a range first, then choose a frequency uniformly within it. Off by default, frequency selection is weighted across all values in all ranges." />
 				</View>
-				<Text style={styles.help}>Select a range first, then choose a frequency uniformly within it. Off by default, frequency selection is weighted across all values in all ranges.</Text>
 				<Button title={`Frequency randomization: ${props.values.randomForm.frequencyPerChannel ? 'per LED' : 'per session'}`} onPress={function (): void { updateRandomForm(function (form): FormValues { return({ ...form, frequencyPerChannel: !form.frequencyPerChannel }); }); }} />
 				<Field label="Power minimum" error={fieldError('power.min')} value={props.values.randomForm.powerMin} onChangeText={function (powerMin): void { updateRandomForm(function (form): FormValues { return({ ...form, powerMin: powerMin }); }); }} keyboardType="numeric" helpText="The lowest power value used during the session." />
 				<Field label="Power maximum (optional)" error={fieldError('power.max')} value={props.values.randomForm.powerMax} onChangeText={function (powerMax): void { updateRandomForm(function (form): FormValues { return({ ...form, powerMax: powerMax }); }); }} keyboardType="numeric" helpText="The highest power value available. Leave blank to use the power minimum throughout the session." />
