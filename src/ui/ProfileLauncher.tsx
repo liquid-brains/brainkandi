@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import type { GestureResponderEvent } from 'react-native';
 
-import { dropProfileTile, moveProfileOut } from '../core/profile-layout';
+import { deleteProfileFolder, dropProfileTile, moveProfileOut } from '../core/profile-layout';
 import type { ProfileFolder, ProfileLayout, ProfileTile } from '../core/profile-layout';
 import { createProfileID } from '../core/profiles';
 import type { ProfileID, StoredProfile } from '../core/profiles';
@@ -24,6 +24,7 @@ export function ProfileLauncher(props: {
 }): React.JSX.Element {
 	const [folderID, setFolderID] = useState<string>();
 	const [folderName, setFolderName] = useState('');
+	const [renamingFolderID, setRenamingFolderID] = useState<string>();
 	const [drag, setDrag] = useState<Drag>();
 	const grid = useRef<View>(null);
 	const bounds = useRef({ x: 0, y: 0, width: 0, height: 0 });
@@ -127,10 +128,6 @@ export function ProfileLauncher(props: {
 			}} />}
 			{folder !== undefined && <View style={styles.controls}>
 				<ButtonComponent title="Back to profiles" onPress={function (): void { cancelDrag(); setFolderID(undefined); }} />
-				<TextInput accessibilityLabel="Folder name" value={folderName} onChangeText={setFolderName} editable={!props.disabled} style={styles.input} />
-				<ButtonComponent title="Rename folder" disabled={props.disabled || folderName.trim() === ''} onPress={function (): void {
-					props.onChange(props.layout.map(function (slot) { return(slot === folder ? { ...folder, name: folderName.trim() } : slot); }));
-				}} />
 			</View>}
 			<Text style={styles.help}>{folder === undefined
 				? 'Hold a profile or folder to drag it. Drop it on a folder to move it there, or elsewhere to reorder.'
@@ -172,8 +169,8 @@ export function ProfileLauncher(props: {
 								onPress={function (): void {
 									if (activeDrag.current !== undefined) { return; }
 									if (slot.kind === 'folder') {
+										setRenamingFolderID(undefined);
 										setFolderID(slot.id);
-										setFolderName(slot.name);
 									}
 								}}
 								style={[styles.tile, drag?.from === index && styles.moving]}
@@ -183,6 +180,23 @@ export function ProfileLauncher(props: {
 									<Text style={styles.help}>{slot.profiles.length} profiles</Text>
 								</View> : profile !== undefined && props.renderProfile(profile)}
 							</Pressable>
+							{folder === undefined && slot.kind === 'folder' && <View style={styles.folderActions}>
+								{renamingFolderID === slot.id ? <>
+									<TextInput accessibilityLabel="Folder name" value={folderName} onChangeText={setFolderName} editable={!props.disabled} style={styles.input} />
+									<ButtonComponent title="Save folder name" disabled={props.disabled || folderName.trim() === ''} onPress={function (): void {
+										props.onChange(props.layout.map(function (item) { return(item === slot ? { ...slot, name: folderName.trim() } : item); }));
+										setRenamingFolderID(undefined);
+									}} />
+									<ButtonComponent title="Cancel rename" onPress={function (): void { setRenamingFolderID(undefined); }} />
+								</> : <ButtonComponent title="Rename folder" disabled={props.disabled} onPress={function (): void {
+									setFolderName(slot.name);
+									setRenamingFolderID(slot.id);
+								}} />}
+								<ButtonComponent title="Delete folder" disabled={props.disabled} onPress={function (): void {
+									props.onChange(deleteProfileFolder(props.layout, slot.id));
+									setRenamingFolderID(undefined);
+								}} />
+							</View>}
 						</View>
 					);
 				})}
@@ -201,6 +215,7 @@ function makeStyles(colors: AppColors) {
 		cell: { width: '100%' },
 		tile: { width: '100%', userSelect: 'none' },
 		folder: { marginTop: 2, padding: 14, borderRadius: 8, backgroundColor: colors.surface },
+		folderActions: { gap: 6, marginBottom: 8 },
 		moving: { opacity: 0.4, borderColor: colors.accent },
 		name: { color: colors.text, fontSize: 17, fontWeight: '700' },
 		help: { color: colors.text, fontSize: 12, marginVertical: 4 },

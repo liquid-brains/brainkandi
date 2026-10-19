@@ -97,6 +97,19 @@ export function moveProfileOut(layout: ProfileLayout, folderID: string, profileI
 	return(updated);
 }
 
+export function deleteProfileFolder(layout: ProfileLayout, folderID: string): ProfileLayout {
+	const folder = layout.find(function (slot): boolean { return(slot?.kind === 'folder' && slot.id === folderID); });
+	if (folder?.kind !== 'folder') {
+		return(layout);
+	}
+	return(layout.flatMap(function (slot): ProfileTile[] | (ProfileTile | ProfileFolder)[] {
+		if (slot === folder) {
+			return(folder.profiles.map(function (profileID): ProfileTile { return({ kind: 'profile', profileID: profileID }); }));
+		}
+		return(slot === null ? [] : [slot]);
+	}));
+}
+
 export class AsyncStorageProfileLayoutStore {
 	public async load(): Promise<ProfileLayout> {
 		const serialized = await AsyncStorage.getItem(layoutStorageKey);
