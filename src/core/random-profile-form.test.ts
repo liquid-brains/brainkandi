@@ -9,6 +9,7 @@ describe('random profile editor', function () {
 		const parameters: RandomSessionParameters = {
 			basename: 'weighted',
 			duration: 5,
+			sessionDuration: 59,
 			frequency: {
 				ranges: [{ min: 10, max: 20 }, { min: 40 }],
 				offPercentage: 10,
@@ -25,10 +26,28 @@ describe('random profile editor', function () {
 	it('defaults Off % to zero and leaves weights unset for library calculation', function () {
 		const parameters = randomParametersFromForm(defaultFormValues);
 
+		expect(parameters.sessionDuration).toBe(1);
 		expect(parameters.frequency.ranges).toEqual([{ min: 10 }]);
 		expect(parameters.frequency.offPercentage).toBe(0);
 		expect(parameters.abCoupling).toBeUndefined();
 		expect(formValuesFromRandomParameters(parameters).abCouplingDistribution).toBe('');
+	});
+
+	it('allows an omitted session duration and defaults missing profile values to one minute', function () {
+		const parameters: RandomSessionParameters = {
+			duration: 5,
+			frequency: { ranges: [{ min: 10 }] },
+			power: { min: 1 }
+		};
+
+		expect(randomParametersFromForm({ ...defaultFormValues, sessionDuration: '' }).sessionDuration).toBeUndefined();
+		expect(formValuesFromRandomParameters(parameters).sessionDuration).toBe('1');
+	});
+
+	it.each(['0', '60', '1.5', 'invalid'])('rejects invalid per-session duration %s', function (sessionDuration) {
+		const errors = getRandomFormValidationErrors({ ...defaultFormValues, sessionDuration: sessionDuration });
+
+		expect(errors[0]?.field).toBe('sessionDuration');
 	});
 
 	it('supports all channels off without adding an off range', function () {

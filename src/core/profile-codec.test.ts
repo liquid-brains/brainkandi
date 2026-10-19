@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { decapsulateProfiles, decapsulateSharedProfile, encapsulateProfiles, encapsulateSharedProfile } from './profile-codec';
 import type { StoredProfile } from './profiles';
-import { defaultFormValues, randomParametersFromProfile, randomProfileFromForm } from './random-profile-form';
+import { defaultFormValues, randomFormFromProfile, randomParametersFromProfile, randomProfileFromForm } from './random-profile-form';
 
 describe('profile serialization', function () {
 	it('round-trips every supported profile kind', function () {
@@ -22,6 +22,42 @@ describe('profile serialization', function () {
 		];
 
 		expect(decapsulateProfiles(encapsulateProfiles(profiles))).toEqual(profiles);
+	});
+
+	it('preserves optional session duration and defaults older profiles to one minute', function () {
+		const profile: StoredProfile['profile'] = {
+			kind: 'random',
+			name: 'Long session',
+			parameters: { duration: 5, sessionDuration: 59, frequency: { ranges: [{ min: 10 }] }, power: { min: 1 } }
+		};
+		const olderProfile: StoredProfile['profile'] = {
+			kind: 'random',
+			name: 'Existing session',
+			parameters: { duration: 5, frequency: { ranges: [{ min: 10 }] }, power: { min: 1 } }
+		};
+		const decoded = decapsulateSharedProfile(encapsulateSharedProfile(profile));
+		const olderDecoded = decapsulateSharedProfile(encapsulateSharedProfile(olderProfile));
+
+		expect(decoded).toEqual(profile);
+		if (olderDecoded.kind !== 'random') {
+			expect.fail('Existing profile must remain random.');
+		}
+		expect(randomFormFromProfile(olderDecoded).sessionDuration).toBe('1');
+		expect(randomParametersFromProfile(olderDecoded).sessionDuration).toBeUndefined();
+	});
+
+	it('defaults older random profile drafts to a one-minute session', function () {
+		const input = { ...defaultFormValues };
+		delete (input as Partial<typeof input>).sessionDuration;
+		const decoded = decapsulateSharedProfile(JSON.stringify({
+			version: 1,
+			profile: { kind: 'random', name: 'Existing draft', input: input }
+		}));
+
+		if (decoded.kind !== 'random') {
+			expect.fail('Existing draft must remain random.');
+		}
+		expect(randomFormFromProfile(decoded).sessionDuration).toBe('1');
 	});
 
 	it('rejects unsupported durable formats', function () {

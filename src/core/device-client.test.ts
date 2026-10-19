@@ -22,6 +22,7 @@ describe('random session execution with Off %', function () {
 		const parameters: RandomSessionParameters = {
 			basename: 'weighted',
 			duration: 5,
+			sessionDuration: 1,
 			frequency: { ranges: [{ min: 10, max: 20 }], offPercentage: 40, perChannel: true },
 			coupling: { min: 5, distribution: 25 },
 			abCoupling: { distribution: 75 },
