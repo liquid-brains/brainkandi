@@ -1,6 +1,7 @@
 /node_modules/
 /dist/
 /dist-linux/
+/dist-desktop/
 /.expo/
 /.android-sdk/
 /.gradle/

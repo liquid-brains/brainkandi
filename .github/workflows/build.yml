@@ -31,6 +31,16 @@ jobs:
             build_target: ipa
             artifact_name: brainkandi-ios
             artifact_path: .xcode-derived-data/Build/Products/Release-iphoneos/BrainKandi.app
+          - platform: Windows
+            runner: windows-latest
+            build_target: desktop
+            artifact_name: brainkandi-windows
+            artifact_path: dist-desktop/brainkandi-windows.zip
+          - platform: macOS
+            runner: macos-latest
+            build_target: desktop
+            artifact_name: brainkandi-macos
+            artifact_path: dist-desktop/brainkandi-macos.zip
 
     steps:
       - uses: actions/checkout@v7
@@ -83,11 +93,30 @@ jobs:
             ${{ runner.os }}-${{ matrix.platform }}-build-
 
       - name: Build
+        if: matrix.build_target != 'desktop'
         env:
           BUILD_TARGET: ${{ matrix.build_target }}
           ANDROID_HOME: /usr/local/lib/android/sdk
           ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
         run: make
+
+      - name: Build desktop app
+        if: matrix.build_target == 'desktop'
+        shell: bash
+        run: |
+          npm ci
+          npm run typecheck
+          npm test
+          npm run package:desktop
+
+      - name: Archive Windows app
+        if: matrix.platform == 'Windows'
+        shell: pwsh
+        run: Compress-Archive -Path dist-desktop/BrainKandi-win32-* -DestinationPath dist-desktop/brainkandi-windows.zip
+
+      - name: Archive macOS app
+        if: matrix.platform == 'macOS'
+        run: ditto -c -k --sequesterRsrc --keepParent dist-desktop/BrainKandi-darwin-*/BrainKandi.app dist-desktop/brainkandi-macos.zip
 
       - name: Upload artifact
         uses: actions/upload-artifact@v7

@@ -10,6 +10,7 @@
     "test": "vitest run",
     "bundle:android": "expo export --platform android",
     "bundle:linux": "expo export --platform web --output-dir dist-linux",
+    "package:desktop": "npm run bundle:linux && node scripts/package-desktop.mjs",
     "linux": "electron linux/main.cjs"
   },
   "dependencies": {
@@ -31,6 +32,7 @@
     "react-native-web": "^0.21.0"
   },
   "devDependencies": {
+    "@electron/packager": "^20.3.0",
     "@types/react": "~19.2.10",
     "electron": "^40.4.1",
     "typescript": "~5.9.2",
