@@ -64,12 +64,22 @@ jobs:
           sdkmanager="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
           test -x "$sdkmanager"
           yes | "$sdkmanager" --licenses
-          "$sdkmanager" \
-            "platform-tools" \
-            "platforms;android-36" \
-            "build-tools;36.0.0" \
-            "ndk;27.1.12297006" \
-            "cmake;3.22.1"
+          for attempt in 1 2 3; do
+            if "$sdkmanager" --verbose \
+              "platform-tools" \
+              "platforms;android-36" \
+              "build-tools;36.0.0" \
+              "ndk;27.1.12297006" \
+              "cmake;3.22.1"; then
+              break
+            fi
+            if [ "$attempt" -eq 3 ]; then
+              echo "::error::Android SDK installation failed after $attempt attempts."
+              exit 1
+            fi
+            echo "::warning::Android SDK installation failed on attempt $attempt; retrying."
+            sleep "$((attempt * 10))"
+          done
 
       - name: Install ccache
         if: matrix.platform == 'Android'
