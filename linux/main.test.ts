@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { runInNewContext } from 'node:vm';
 import { describe, expect, it, vi } from 'vitest';
 
-function loadLauncher() {
+function loadLauncher(platform = 'darwin') {
 	const listeners = new Map<string, () => void>();
 	const loadURL = vi.fn().mockResolvedValue(undefined);
 	const getAllWindows = vi.fn().mockReturnValue([]);
@@ -20,10 +20,13 @@ function loadLauncher() {
 		close: vi.fn()
 	};
 	const quit = vi.fn();
+	const appendSwitch = vi.fn();
+	const whenReady = vi.fn(function () { return({ then: vi.fn() }); });
 	const modules = {
 		electron: {
 			app: {
-				whenReady: function () { return({ then: vi.fn() }); },
+				commandLine: { appendSwitch },
+				whenReady,
 				on: function (event: string, listener: () => void) { listeners.set(event, listener); },
 				quit
 			},
@@ -36,10 +39,18 @@ function loadLauncher() {
 	runInNewContext(readFileSync(new URL('./main.cjs', import.meta.url), 'utf8'), {
 		require: function (name: keyof typeof modules) { return(modules[name]); },
 		__dirname: fileURLToPath(new URL('.', import.meta.url)),
-		process: { platform: 'darwin' }
+		process: { platform }
 	});
-	return({ listeners, BrowserWindow, getAllWindows, loadURL, server, quit });
+	return({ listeners, BrowserWindow, getAllWindows, loadURL, server, quit, appendSwitch, whenReady });
 }
+
+describe('desktop sandbox', function () {
+	it.each(['linux', 'darwin', 'win32'])('disables the sandbox before app readiness on %s', function (platform) {
+		const launcher = loadLauncher(platform);
+		expect(launcher.appendSwitch).toHaveBeenCalledExactlyOnceWith('no-sandbox');
+		expect(launcher.appendSwitch.mock.invocationCallOrder[0]).toBeLessThan(launcher.whenReady.mock.invocationCallOrder[0]!);
+	});
+});
 
 describe('macOS desktop activation', function () {
 	it('reopens the app and restarts its bundle server after the last window closes', async function () {

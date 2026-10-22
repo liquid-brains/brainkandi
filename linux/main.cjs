@@ -3,6 +3,8 @@ const fs = require('node:fs');
 const http = require('node:http');
 const path = require('node:path');
 
+app.commandLine.appendSwitch('no-sandbox');
+
 let bundleServer;
 const bundleServerPort = 43815;
 
