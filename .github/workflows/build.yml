@@ -23,9 +23,9 @@ jobs:
             artifact_path: android/app/build/outputs/apk/release/app-release.apk
           - platform: Linux
             runner: ubuntu-latest
-            build_target: bundle-linux
+            build_target: desktop
             artifact_name: brainkandi-linux
-            artifact_path: dist-linux
+            artifact_path: dist-desktop/brainkandi-linux.tar.gz
           - platform: iOS
             runner: macos-latest
             build_target: ipa
@@ -118,6 +118,10 @@ jobs:
           npm run typecheck
           npm test
           npm run package:desktop
+
+      - name: Archive Linux app
+        if: matrix.platform == 'Linux'
+        run: tar -czf dist-desktop/brainkandi-linux.tar.gz -C dist-desktop BrainKandi-linux-x64
 
       - name: Archive Windows app
         if: matrix.platform == 'Windows'
