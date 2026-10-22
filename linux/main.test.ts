@@ -1,4 +1,6 @@
-import { readFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import { chmodSync, copyFileSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { runInNewContext } from 'node:vm';
@@ -45,10 +47,32 @@ function loadLauncher(platform = 'darwin') {
 }
 
 describe('desktop sandbox', function () {
-	it.each(['linux', 'darwin', 'win32'])('disables the sandbox before app readiness on %s', function (platform) {
+	it.each(['linux', 'darwin', 'win32'])('requests sandbox disablement before app readiness on %s', function (platform) {
 		const launcher = loadLauncher(platform);
 		expect(launcher.appendSwitch).toHaveBeenCalledExactlyOnceWith('no-sandbox');
 		expect(launcher.appendSwitch.mock.invocationCallOrder[0]).toBeLessThan(launcher.whenReady.mock.invocationCallOrder[0]!);
+	});
+});
+
+describe.skipIf(process.platform !== 'linux')('portable Linux launcher', function () {
+	it('passes --no-sandbox to the executable before startup and preserves arguments and exit status', function () {
+		const directory = mkdtempSync(path.join(os.tmpdir(), 'brainkandi launcher-'));
+		try {
+			const launcherPath = path.join(directory, 'BrainKandi');
+			copyFileSync(new URL('./launch.sh', import.meta.url), launcherPath);
+			chmodSync(launcherPath, 0o755);
+			writeFileSync(path.join(directory, 'BrainKandi.bin'), '#!/bin/sh\nprintf "%s\\n" "$@"\nexit 17\n', { mode: 0o755 });
+			const result = spawnSync(launcherPath, ['--custom-flag', 'argument with spaces', ''], {
+				cwd: os.tmpdir(),
+				encoding: 'utf8'
+			});
+			expect(result.error).toBeUndefined();
+			expect(result.status).toBe(17);
+			expect(result.stdout).toBe('--no-sandbox\n--custom-flag\nargument with spaces\n\n');
+			expect(result.stderr).toBe('');
+		} finally {
+			rmSync(directory, { recursive: true, force: true });
+		}
 	});
 });
 

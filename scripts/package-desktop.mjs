@@ -1,5 +1,5 @@
 import { packager } from '@electron/packager';
-import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { chmod, cp, mkdir, mkdtemp, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -28,6 +28,12 @@ try {
 		overwrite: true
 	});
 	for (const outputPath of outputPaths) {
+		if (process.platform === 'linux') {
+			const launcherPath = path.join(outputPath, 'BrainKandi');
+			await rename(launcherPath, path.join(outputPath, 'BrainKandi.bin'));
+			await cp(path.join(root, 'linux/launch.sh'), launcherPath);
+			await chmod(launcherPath, 0o755);
+		}
 		console.log(`Desktop app: ${outputPath}`);
 	}
 } finally {
