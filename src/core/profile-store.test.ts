@@ -16,7 +16,7 @@ import { defaultFormValues, randomFormFromProfile, randomParametersFromProfile, 
 
 beforeEach(function (): void { storage.clear(); });
 
-describe('saving invalid random profiles', function () {
+describe('saving invalid profiles', function () {
 	it.each(['61', '', 'bad duration'])('saves and reloads %s, then runs only after correction', async function (duration) {
 		const store = new AsyncStorageProfileStore();
 		const input = { ...defaultFormValues, duration: duration };

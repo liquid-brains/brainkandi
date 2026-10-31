@@ -13,7 +13,7 @@ describe('profile serialization', function () {
 			},
 			{
 				id: 'random-profile' as StoredProfile['id'],
-				profile: { kind: 'random', name: 'Random', parameters: { duration: 20, frequency: { ranges: [{ min: 10, max: 40 }] }, power: { min: 1, max: 5 } } }
+				profile: { kind: 'random', name: 'Profile', parameters: { duration: 20, frequency: { ranges: [{ min: 10, max: 40 }] }, power: { min: 1, max: 5 } } }
 			},
 			{
 				id: 'ai-profile' as StoredProfile['id'],
@@ -46,7 +46,7 @@ describe('profile serialization', function () {
 		expect(randomParametersFromProfile(olderDecoded).sessionDuration).toBeUndefined();
 	});
 
-	it('defaults older random profile drafts to a one-minute session', function () {
+	it('defaults older profile drafts to a one-minute session', function () {
 		const input = { ...defaultFormValues };
 		delete (input as Partial<typeof input>).sessionDuration;
 		const decoded = decapsulateSharedProfile(JSON.stringify({
@@ -86,7 +86,7 @@ describe('profile serialization', function () {
 		}).toThrow('description is invalid');
 	});
 
-	it('transforms legacy locally saved random profiles to the current structure', function () {
+	it('transforms legacy locally saved profiles to the current structure', function () {
 		const serialized = JSON.stringify({
 			version: 1,
 			profiles: [{
@@ -145,7 +145,7 @@ describe('profile serialization', function () {
 		expect(decapsulateSharedProfile(encapsulateSharedProfile(profile))).toEqual(profile);
 	});
 
-	it('preserves the advanced random profile editor preference', function () {
+	it('preserves the advanced profile editor preference', function () {
 		const profile: StoredProfile['profile'] = {
 			kind: 'random',
 			name: 'Advanced',
