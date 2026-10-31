@@ -85,11 +85,11 @@ describe('sequence profiles', function () {
 		expect(runnableProfileSteps(sequence)).toEqual([file]);
 	});
 
-	it('runs nested generated session, File, and Sequence steps in order', function () {
-		const random: StoredProfile = { id: 'random' as ProfileID, profile: { kind: 'random', name: 'Generated session', parameters: { duration: 1, frequency: { ranges: [{ min: 10 }] }, power: { min: 1 } } } };
+	it('runs nested profiles in order', function () {
+		const random: StoredProfile = { id: 'random' as ProfileID, profile: { kind: 'random', name: 'Profile', parameters: { duration: 1, frequency: { ranges: [{ min: 10 }] }, power: { min: 1 } } } };
 		const nested: StoredProfile = { id: 'nested' as ProfileID, profile: { kind: 'sequence', name: 'Nested', steps: [createSequenceStep(random, 'value'), createSequenceStep(source, 'reference')] } };
 		const sequence: SequenceProfile = { kind: 'sequence', name: 'Outer', steps: [createSequenceStep(source, 'value'), createSequenceStep(nested, 'value')] };
-		expect(runnableProfileSteps(sequence, [source, random, nested]).map(function (step): string { return(step.name); })).toEqual(['File', 'Generated session', 'File']);
+		expect(runnableProfileSteps(sequence, [source, random, nested]).map(function (step): string { return(step.name); })).toEqual(['File', 'Profile', 'File']);
 	});
 
 	it('retains reference semantics inside a sequence copied by value', function () {

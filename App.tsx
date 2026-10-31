@@ -280,13 +280,13 @@ function profileDescription(profile: SessionProfile): string {
 			return(`File: ${profile.fileName}`);
 		case 'random':
 			if (profile.input !== undefined) {
-				return('Generated session: draft input; edit highlighted fields before running.');
+				return('Profile: draft input; edit highlighted fields before running.');
 			}
 			const ranges = profile.parameters.frequency.ranges.map(function (range): string {
 				return(`${range.max === undefined ? String(range.min) : `${range.min}-${range.max}`} Hz`);
 			});
 			const phase = profile.parameters.abCoupling?.distribution;
-			return(`Generated session: ${profile.parameters.duration} minute(s), ${ranges.join(', ')}, Off ${profile.parameters.frequency.offPercentage ?? 0}%${phase === undefined ? '' : `, Phase A ${phase}%`}`);
+			return(`Profile: ${profile.parameters.duration} minute(s), ${ranges.join(', ')}, Off ${profile.parameters.frequency.offPercentage ?? 0}%${phase === undefined ? '' : `, Phase A ${phase}%`}`);
 		case 'ai':
 			return('Unsupported profile type');
 		case 'sequence':
@@ -1433,23 +1433,23 @@ function ProfileEditorModal(props: {
 							setRestError(errorMessage(error));
 						}
 					}} />
-					{eligible.length === 0 && <Text style={styles.help}>Save a generated session profile, File profile, or Sequence profile first.</Text>}
+					{eligible.length === 0 && <Text style={styles.help}>Save a profile first.</Text>}
 				</Section>
 			);
 		}
 		return(
-			<Section title="Generated session profile">
+			<Section title="Profile">
 				<Field label="Profile name" value={props.values.name} onChangeText={function (name): void { props.onChangeValues(function (current): ProfileEditorValues { return({ ...current, name: name }); }); }} />
 				{renderDescriptionField()}
 				<View style={styles.settingRow}>
 					<Text style={styles.label}>Profile fields: {props.values.advanced ? 'Advanced' : 'Basic'}</Text>
-					<Switch accessibilityLabel="Advanced generated session fields" value={props.values.advanced} onValueChange={function (advanced): void {
+					<Switch accessibilityLabel="Advanced profile fields" value={props.values.advanced} onValueChange={function (advanced): void {
 						props.onChangeValues(function (current): ProfileEditorValues { return({ ...current, advanced: advanced }); });
 					}} />
 				</View>
 				<Field label="Generated file name prefix" error={fieldError('basename')} value={props.values.randomForm.basename} onChangeText={function (basename): void { props.onChangeValues(function (current): ProfileEditorValues { return({ ...current, randomForm: { ...current.randomForm, basename: basename } }); }); }} autoCapitalize="none" helpText="The beginning of each generated filename on the device. Must not contain a period." />
-				<Field label="Number of sessions" error={fieldError('duration')} value={props.values.randomForm.duration} onChangeText={function (duration): void { props.onChangeValues(function (current): ProfileEditorValues { return({ ...current, randomForm: { ...current.randomForm, duration: duration } }); }); }} keyboardType="numeric" helpText="The number of generated session parts: a whole number from 1 through 60." />
-				<Field label="Session duration (minutes, optional)" error={fieldError('sessionDuration')} value={props.values.randomForm.sessionDuration} onChangeText={function (sessionDuration): void { props.onChangeValues(function (current): ProfileEditorValues { return({ ...current, randomForm: { ...current.randomForm, sessionDuration: sessionDuration } }); }); }} keyboardType="numeric" helpText="The duration of each generated session part: a whole number from 1 through 59 minutes. Leave blank to use 1 minute." />
+				<Field label="Number of sessions" error={fieldError('duration')} value={props.values.randomForm.duration} onChangeText={function (duration): void { props.onChangeValues(function (current): ProfileEditorValues { return({ ...current, randomForm: { ...current.randomForm, duration: duration } }); }); }} keyboardType="numeric" helpText="The number of session parts: a whole number from 1 through 60." />
+				<Field label="Session duration (minutes, optional)" error={fieldError('sessionDuration')} value={props.values.randomForm.sessionDuration} onChangeText={function (sessionDuration): void { props.onChangeValues(function (current): ProfileEditorValues { return({ ...current, randomForm: { ...current.randomForm, sessionDuration: sessionDuration } }); }); }} keyboardType="numeric" helpText="The duration of each session part: a whole number from 1 through 59 minutes. Leave blank to use 1 minute." />
 				{validationErrors.length > 10000 /* TMP */ && <Text style={styles.fieldError}>This profile can be saved, but cannot run until the highlighted fields are corrected.</Text>}
 				<Field label="Phase A probability (%, optional)" error={fieldError('abCoupling.distribution')} value={props.values.randomForm.abCouplingDistribution} onChangeText={function (abCouplingDistribution): void { updateRandomForm(function (form): FormValues { return({ ...form, abCouplingDistribution: abCouplingDistribution }); }); }} keyboardType="numeric" helpText="For each LED, the chance of selecting Phase A rather than Phase B, independent of cross-coupling. Use a whole percentage from 0 through 100. Leave blank for 50%; 0 selects only Phase B and 100 selects only Phase A." />
 				<Field label="Percent probability an LED will be off (optional)" error={fieldError('frequency.offPercentage')} value={props.values.randomForm.frequencyOffPercentage} onChangeText={function (frequencyOffPercentage): void { updateRandomForm(function (form): FormValues { return({ ...form, frequencyOffPercentage: frequencyOffPercentage }); }); }} keyboardType="numeric" helpText="The percentage chance that each LED is off, independently of the selected frequency and other LEDs. Use a whole percentage from 0 through 100. Zero or blank means no LEDs are off (default); 100 means all LEDs are off. This is a probability, not a guaranteed exact proportion in each session part." />

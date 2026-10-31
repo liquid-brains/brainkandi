@@ -8,7 +8,7 @@ import type { Journey } from './journey-store';
 import type { ProfileID, SequenceProfile, StoredProfile } from './profiles';
 
 const file: StoredProfile = { id: 'file' as ProfileID, profile: { kind: 'file', name: 'File', fileName: 'file.vnp0', fileData: { filename: 'file' } } };
-const random: StoredProfile = { id: 'random' as ProfileID, profile: { kind: 'random', name: 'Generated session', parameters: { duration: 1, frequency: { ranges: [{ min: 10 }] }, power: { min: 1 } } } };
+const random: StoredProfile = { id: 'random' as ProfileID, profile: { kind: 'random', name: 'Profile', parameters: { duration: 1, frequency: { ranges: [{ min: 10 }] }, power: { min: 1 } } } };
 const sequence: SequenceProfile = { kind: 'sequence', name: 'Sequence', steps: [createSequenceStep(file, 'reference'), createSequenceStep(random, 'value'), createSequenceStep(file, 'value')] };
 
 afterEach(function (): void { vi.restoreAllMocks(); });
@@ -48,8 +48,8 @@ describe('sequence execution and journal snapshots', function () {
 		]);
 		expect(status.mock.calls.flat()).toEqual([
 			'Step 1 of 3: File',
-			'Step 2 of 3: Generated session',
-			'Step 2 of 3: Generated session. Uploaded session part 1 of 1.',
+			'Step 2 of 3: Profile',
+			'Step 2 of 3: Profile. Uploaded session part 1 of 1.',
 			'Step 3 of 3: File'
 		]);
 		expect(off).toHaveBeenCalledTimes(5);
@@ -120,6 +120,6 @@ describe('sequence execution and journal snapshots', function () {
 		if (reloaded?.profile.kind !== 'sequence') {
 			expect.fail('Journal snapshot must contain the sequence.');
 		}
-		expect(reloaded.profile.steps.map(function (step): string { return(step.profile.name); })).toEqual(['Current file', 'Generated session', 'File']);
+		expect(reloaded.profile.steps.map(function (step): string { return(step.profile.name); })).toEqual(['Current file', 'Profile', 'File']);
 	});
 });
