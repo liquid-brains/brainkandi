@@ -4,7 +4,7 @@ import { BrainlightError } from '@liquid-brains/brainlight/lib/neuropro/index.js
 import { defaultFormValues, formValuesFromRandomParameters, getRandomFormValidationErrors, randomFormFromProfile, randomParametersFromForm, randomParametersFromProfile, randomProfileFromForm } from './random-profile-form';
 import type { RandomSessionParameters } from './profiles';
 
-describe('random profile editor', function () {
+describe('generated session profile editor', function () {
 	it('round-trips frequency ranges, Off % and independent A/B coupling', function () {
 		const parameters: RandomSessionParameters = {
 			basename: 'weighted',

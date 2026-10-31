@@ -280,13 +280,13 @@ function profileDescription(profile: SessionProfile): string {
 			return(`File: ${profile.fileName}`);
 		case 'random':
 			if (profile.input !== undefined) {
-				return('Random: draft input; edit highlighted fields before running.');
+				return('Generated session: draft input; edit highlighted fields before running.');
 			}
 			const ranges = profile.parameters.frequency.ranges.map(function (range): string {
 				return(`${range.max === undefined ? String(range.min) : `${range.min}-${range.max}`} Hz`);
 			});
 			const phase = profile.parameters.abCoupling?.distribution;
-			return(`Random: ${profile.parameters.duration} minute(s), ${ranges.join(', ')}, Off ${profile.parameters.frequency.offPercentage ?? 0}%${phase === undefined ? '' : `, Phase A ${phase}%`}`);
+			return(`Generated session: ${profile.parameters.duration} minute(s), ${ranges.join(', ')}, Off ${profile.parameters.frequency.offPercentage ?? 0}%${phase === undefined ? '' : `, Phase A ${phase}%`}`);
 		case 'ai':
 			return('Unsupported profile type');
 		case 'sequence':
@@ -1433,17 +1433,17 @@ function ProfileEditorModal(props: {
 							setRestError(errorMessage(error));
 						}
 					}} />
-					{eligible.length === 0 && <Text style={styles.help}>Save a Random, File, or Sequence profile first.</Text>}
+					{eligible.length === 0 && <Text style={styles.help}>Save a generated session profile, File profile, or Sequence profile first.</Text>}
 				</Section>
 			);
 		}
 		return(
-			<Section title="Random profile">
+			<Section title="Generated session profile">
 				<Field label="Profile name" value={props.values.name} onChangeText={function (name): void { props.onChangeValues(function (current): ProfileEditorValues { return({ ...current, name: name }); }); }} />
 				{renderDescriptionField()}
 				<View style={styles.settingRow}>
 					<Text style={styles.label}>Profile fields: {props.values.advanced ? 'Advanced' : 'Basic'}</Text>
-					<Switch accessibilityLabel="Advanced random profile fields" value={props.values.advanced} onValueChange={function (advanced): void {
+					<Switch accessibilityLabel="Advanced generated session fields" value={props.values.advanced} onValueChange={function (advanced): void {
 						props.onChangeValues(function (current): ProfileEditorValues { return({ ...current, advanced: advanced }); });
 					}} />
 				</View>

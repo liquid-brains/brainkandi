@@ -6,5 +6,5 @@
 [x] Change the background color of the sections (e.g., Experiment, File profile, Saved profiles) from light yellow to smiley face yellow
 [x] Make editing a profile into a structured form instead of editing JSON
 [x] The icon for the application is created from the logo, but isn't that great because the logo is more square and many things create a circle from the icon -- there is now a logo/icon-input.png which is for this purpose
-[x] Change "SAVE RANDOM PROFILE" into "SAVE PROFILE" (saving a random profile sounds like it will save random data instead of saving the profile with the parameters and kind random)
+[x] Use "SAVE PROFILE" so saving a profile is not confused with generating random data
 [x] Don't mention AI profiles in the future

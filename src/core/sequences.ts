@@ -4,7 +4,7 @@ import { randomParametersFromProfile } from './random-profile-form';
 
 export function createSequenceStep(storedProfile: StoredProfile, mode: SequenceStep['mode']): SequenceStep {
 	if (storedProfile.profile.kind === 'ai') {
-		throw(new Error('Sequences can contain only Random, File, or Sequence profiles.'));
+		throw(new Error('Sequences can contain only generated session profiles, File profiles, or Sequence profiles.'));
 	}
 	return({
 		mode: mode,
@@ -85,7 +85,7 @@ export function resolveSequenceProfile(profile: SessionProfile, profiles: Stored
 			}
 			const resolved = resolveSequenceProfile(sequenceStepProfile(step, profiles), profiles, sequenceDepth + 1, path);
 			if (resolved.kind === 'ai') {
-				throw(new Error('Sequences can contain only Random, File, or Sequence profiles.'));
+				throw(new Error('Sequences can contain only generated session profiles, File profiles, or Sequence profiles.'));
 			}
 			return({ ...step, profile: resolved });
 		})
