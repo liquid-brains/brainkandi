@@ -40,6 +40,7 @@ import { runWithSessionBackground } from './src/core/session-background';
 import { brandColors, getAppColors } from './src/ui/colors';
 import type { AppColors } from './src/ui/colors';
 import { ProfileLauncher } from './src/ui/ProfileLauncher';
+import { ProtocolViewer } from './src/ui/ProtocolViewer';
 import type { SavedDevice } from './src/core/device-store';
 import type { Journey, JourneyFile, JourneyRating } from './src/core/journey-store';
 import { encapsulateSharedProfile } from './src/core/profile-codec';
@@ -1542,18 +1543,13 @@ function JourneyParametersModal(props: {
 	journey: Journey | undefined;
 	onClose: () => void;
 }): React.JSX.Element {
-	const { styles } = useContext(ThemeContext);
-	const serializedProfile = props.journey === undefined ? '' : JSON.stringify({
-		profile: props.journey.profile,
-		files: props.journey.files
-	}, undefined, 2);
+	const { colors, styles } = useContext(ThemeContext);
 	return(
 		<Modal animationType="slide" visible={props.journey !== undefined} onRequestClose={props.onClose}>
 			<SafeAreaView style={styles.documentModal}>
-				<Text style={styles.documentModalTitle}>Journal record parameters</Text>
-				<Text style={styles.help}>These are the exact profile settings and device files saved when this session began.</Text>
+				<Text style={styles.documentModalTitle}>Protocol viewer</Text>
 				<ScrollView contentContainerStyle={styles.parametersViewer} keyboardShouldPersistTaps="handled">
-					<Text selectable style={styles.parametersText}>{serializedProfile}</Text>
+					{props.journey !== undefined && <ProtocolViewer key={props.journey.id} journey={props.journey} colors={colors} />}
 				</ScrollView>
 				<Button title="Close" onPress={props.onClose} />
 			</SafeAreaView>
@@ -1671,7 +1667,6 @@ function createStyles(colors: AppColors) {
 	documentModalTitle: { color: colors.onBackground, fontSize: 26, fontWeight: '800' },
 	documentInput: { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: 8, borderWidth: 1, color: colors.inputText, flex: 1, fontFamily: 'monospace', padding: 12, textAlignVertical: 'top' },
 	parametersViewer: { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: 8, borderWidth: 1, flexGrow: 1, padding: 12 },
-	parametersText: { color: colors.inputText, fontFamily: 'monospace' },
 	editorForm: { gap: 10, paddingBottom: 8 },
 	journalControls: { gap: 8, paddingBottom: 12 },
 	profileTypeChoices: { gap: 10 },
