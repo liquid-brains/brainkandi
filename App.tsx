@@ -412,6 +412,22 @@ export default function App(): React.JSX.Element {
 		}
 	}
 
+	async function changeShowJSONCode(showJSONCode: boolean): Promise<void> {
+		if (isLoadingSettings || isSavingSettings) {
+			return;
+		}
+		setIsSavingSettings(true);
+		try {
+			const updatedSettings = { ...settings, showJSONCode: showJSONCode };
+			await settingsStore.save(updatedSettings);
+			setSettings(updatedSettings);
+		} catch (error) {
+			setStatus(errorMessage(error));
+		} finally {
+			setIsSavingSettings(false);
+		}
+	}
+
 	const loadProfiles = useCallback(async function (newProfileFolder?: { folderID: string; profileID: ProfileID }): Promise<void> {
 		setIsLoadingProfiles(true);
 		try {
@@ -1013,6 +1029,13 @@ export default function App(): React.JSX.Element {
 									</View>
 									<Text style={styles.help}>Use the rounded glass button style instead of standard platform buttons.</Text>
 								</Section>
+								<Section title="Advanced">
+									<View style={styles.settingRow}>
+										<Text style={styles.label}>Show JSON Code</Text>
+										<Switch accessibilityLabel="Show JSON Code" value={settings.showJSONCode} disabled={isLoadingSettings || isSavingSettings} onValueChange={function (value): void { void changeShowJSONCode(value); }} />
+									</View>
+									<Text style={styles.help}>Show a collapsed JSON viewer for each protocol file in the protocol viewer.</Text>
+								</Section>
 								<Section title="Devices">
 									<Text style={styles.label}>IP address of Neuro Pro 2</Text>
 									<Picker enabled={!isRunning} accessibilityLabel="Previously used device" selectedValue={selectedDevicePickerValue()} onValueChange={function (address: string): void {
@@ -1099,7 +1122,7 @@ export default function App(): React.JSX.Element {
 					onClose={function (): void { setJournalEntryJourney(undefined); setJournalEntryText(''); }}
 					onSave={function (): void { void saveJournalEntry(); }}
 				/>
-				<JourneyParametersModal journey={parametersJourney} onClose={function (): void { setParametersJourney(undefined); }} />
+				<JourneyParametersModal journey={parametersJourney} showJSONCode={settings.showJSONCode} onClose={function (): void { setParametersJourney(undefined); }} />
 			</SafeAreaView>
 			</ThemeContext.Provider>
 		</SafeAreaProvider>
@@ -1541,6 +1564,7 @@ function JourneyJournalModal(props: {
 
 function JourneyParametersModal(props: {
 	journey: Journey | undefined;
+	showJSONCode: boolean;
 	onClose: () => void;
 }): React.JSX.Element {
 	const { colors, styles } = useContext(ThemeContext);
@@ -1549,7 +1573,7 @@ function JourneyParametersModal(props: {
 			<SafeAreaView style={styles.documentModal}>
 				<Text style={styles.documentModalTitle}>Protocol viewer</Text>
 				<ScrollView contentContainerStyle={styles.parametersViewer} keyboardShouldPersistTaps="handled">
-					{props.journey !== undefined && <ProtocolViewer key={props.journey.id} journey={props.journey} colors={colors} />}
+					{props.journey !== undefined && <ProtocolViewer key={props.journey.id} journey={props.journey} colors={colors} showJSONCode={props.showJSONCode} />}
 				</ScrollView>
 				<Button title="Close" onPress={props.onClose} />
 			</SafeAreaView>

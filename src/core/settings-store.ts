@@ -3,9 +3,10 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 export type AppSettings = {
 	useSystemColors: boolean;
 	useLiquidGlassButtons: boolean;
+	showJSONCode: boolean;
 };
 
-export const defaultSettings: AppSettings = { useSystemColors: false, useLiquidGlassButtons: false };
+export const defaultSettings: AppSettings = { useSystemColors: false, useLiquidGlassButtons: false, showJSONCode: false };
 const settingsStorageKey = 'brainkandi.settings.v1';
 
 export function encapsulateSettings(settings: AppSettings): string {
@@ -15,7 +16,10 @@ export function encapsulateSettings(settings: AppSettings): string {
 	if (typeof settings.useLiquidGlassButtons !== 'boolean') {
 		throw(new Error('Use liquid glass buttons must be a boolean.'));
 	}
-	return(JSON.stringify({ version: 1, useSystemColors: settings.useSystemColors, useLiquidGlassButtons: settings.useLiquidGlassButtons }));
+	if (typeof settings.showJSONCode !== 'boolean') {
+		throw(new Error('Show JSON code must be a boolean.'));
+	}
+	return(JSON.stringify({ version: 1, useSystemColors: settings.useSystemColors, useLiquidGlassButtons: settings.useLiquidGlassButtons, showJSONCode: settings.showJSONCode }));
 }
 
 export function decapsulateSettings(serialized: string): AppSettings {
@@ -28,13 +32,17 @@ export function decapsulateSettings(serialized: string): AppSettings {
 	if (typeof value !== 'object' || value === null || !('version' in value) || value.version !== 1 || !('useSystemColors' in value) || typeof value.useSystemColors !== 'boolean') {
 		throw(new Error('Saved settings have an unsupported format.'));
 	}
-	if (!('useLiquidGlassButtons' in value)) {
-		return({ useSystemColors: value.useSystemColors, useLiquidGlassButtons: false });
-	}
-	if (typeof value.useLiquidGlassButtons !== 'boolean') {
+	if ('useLiquidGlassButtons' in value && typeof value.useLiquidGlassButtons !== 'boolean') {
 		throw(new Error('Saved liquid glass button setting is invalid.'));
 	}
-	return({ useSystemColors: value.useSystemColors, useLiquidGlassButtons: value.useLiquidGlassButtons });
+	if ('showJSONCode' in value && typeof value.showJSONCode !== 'boolean') {
+		throw(new Error('Saved show JSON code setting is invalid.'));
+	}
+	return({
+		useSystemColors: value.useSystemColors,
+		useLiquidGlassButtons: 'useLiquidGlassButtons' in value ? value.useLiquidGlassButtons === true : false,
+		showJSONCode: 'showJSONCode' in value ? value.showJSONCode === true : false
+	});
 }
 
 export class AsyncStorageSettingsStore {
