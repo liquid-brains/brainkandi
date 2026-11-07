@@ -134,7 +134,7 @@ export function ProfileLauncher(props: {
 				}} />
 			</View>}
 			{folder !== undefined && <View style={styles.controls}>
-				<ButtonComponent title="Back" onPress={function (): void { cancelDrag(); setFolderID(undefined); }} />
+				<ButtonComponent title="Back" onPress={function (): void { cancelDrag(); setFolderID(undefined); props.onFolderChange(undefined); }} />
 			</View>}
 			<View
 				ref={grid}
@@ -175,6 +175,7 @@ export function ProfileLauncher(props: {
 									if (slot.kind === 'folder') {
 										setRenamingFolderID(undefined);
 										setFolderID(slot.id);
+										props.onFolderChange(slot.id);
 									}
 								}}
 								style={[styles.tile, slot.kind === 'folder' && styles.folderTile, drag?.from === index && styles.moving]}
