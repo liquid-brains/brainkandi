@@ -90,7 +90,7 @@ export function ProtocolViewer(props: { journey: Journey; colors: AppColors; sho
 				<View style={styles.jsonPanel}>
 					<Pressable accessibilityRole="button" accessibilityState={{ expanded: jsonExpanded }} onPress={function (): void { setJsonExpanded(function (expanded): boolean { return(!expanded); }); }} style={styles.jsonHeading}>
 						<Text style={styles.heading}>JSON</Text>
-						<Text style={styles.text}>{jsonExpanded ? 'Collapse' : 'Expand'}</Text>
+						<Text accessibilityLabel={jsonExpanded ? 'Collapse JSON' : 'Expand JSON'} style={styles.text}>{jsonExpanded ? '▼' : '▶'}</Text>
 					</Pressable>
 					{jsonExpanded && (
 						<ScrollView style={styles.jsonBox} nestedScrollEnabled>

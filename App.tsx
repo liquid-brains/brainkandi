@@ -653,6 +653,16 @@ export default function App(): React.JSX.Element {
 		}
 	}
 
+	async function createProfileFromJourney(journey: Journey): Promise<void> {
+		try {
+			const copy = await profileStore.save({ ...(JSON.parse(JSON.stringify(journey.profile)) as SessionProfile), name: `Copy of ${journey.profile.name}` });
+			await loadProfiles();
+			setStatus(`Created ${copy.profile.name} from journal entry.`);
+		} catch (error) {
+			setStatus(errorMessage(error));
+		}
+	}
+
 	function openProfileEditor(profile: StoredProfile): void {
 		if (profile.profile.kind === 'ai' || profile.profile.kind === 'rest') {
 			setStatus('This profile type cannot be edited.');
@@ -917,6 +927,7 @@ export default function App(): React.JSX.Element {
 					<JourneyRatingButton thumb="👎" count={journey.rating !== undefined && journey.rating < 0 ? Math.abs(journey.rating) : 1} color={journey.rating !== undefined && journey.rating < 0 ? '#c62828' : '#666'} disabled={journey.outcome === 'running'} onPress={function (): void { void rateJourney(journey, -1); }} />
 					<Button title="Journal entry" disabled={journey.outcome === 'running'} onPress={function (): void { openJournalEntry(journey); }} />
 					<Button title="View parameters" disabled={journey.outcome === 'running'} onPress={function (): void { setParametersJourney(journey); }} />
+					<Button title="Copy to new profile" disabled={journey.outcome === 'running' || isRunning} onPress={function (): void { void createProfileFromJourney(journey); }} />
 					<Button title="Delete" color="#75113d" disabled={journey.id === activeJourneyID.current} onPress={function (): void { void deleteJourney(journey); }} />
 				</View>
 			</View>
@@ -983,6 +994,7 @@ export default function App(): React.JSX.Element {
 						<Text style={styles.activeDevice}>Device: {deviceAddress}</Text>
 						{renderStopSessionButton()}
 
+						<View style={isRunning ? styles.hidden : undefined}>
 						<Section title={profileLayout.find(function (slot): slot is ProfileFolder { return(slot?.kind === 'folder' && slot.id === profileFolderID); })?.name ?? 'Profiles'}>
 							<Button title="New profile" disabled={isRunning || isLoadingProfiles || isSavingLayout} onPress={openProfileCreation} />
 							<Button title="Import profile file" disabled={isRunning || isLoadingProfiles || isSavingLayout} onPress={function (): void { void importProfileFile(); }} />
@@ -1005,6 +1017,7 @@ export default function App(): React.JSX.Element {
 							{journeys.length === 0 ? <Text style={styles.empty}>No journal records yet.</Text> : null}
 							{journeys.length > 3 ? <Button title={`View all ${journeys.length} journal records`} onPress={function (): void { setIsJournalBrowserOpen(true); }} /> : null}
 						</Section>
+						</View>
 
 					</ScrollView>
 				</KeyboardAvoidingView>
@@ -1608,6 +1621,7 @@ function createStyles(colors: AppColors) {
 	headerTitle: { color: colors.onBackground, fontSize: 20, fontWeight: '700' },
 	menuButton: { alignItems: 'center', gap: 5, height: 44, justifyContent: 'center', width: 44 },
 	menuLine: { width: 24, height: 3, backgroundColor: colors.onBackground, borderRadius: 2 },
+	hidden: { display: 'none' },
 	settingsHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
 	settingRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 16 },
 	actionHelpRow: { alignItems: 'center', flexDirection: 'row', gap: 8 },
