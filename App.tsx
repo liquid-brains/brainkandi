@@ -35,6 +35,8 @@ import { AsyncStorageProfileStore } from './src/core/profile-store';
 import { addProfileToFolder, AsyncStorageProfileLayoutStore, reconcileProfileLayout } from './src/core/profile-layout';
 import type { ProfileFolder, ProfileLayout } from './src/core/profile-layout';
 import { AsyncStorageJourneyStore, createJourneyID, recordJourneyFeedback } from './src/core/journey-store';
+import { playSessionSound } from './src/core/session-sounds';
+import { isSwitchingFiles } from './src/core/session-switching';
 import { captureVolumeKeys, volumeKeysAvailable } from './src/core/volume-keys';
 import { AsyncStorageSettingsStore, defaultSettings } from './src/core/settings-store';
 import type { AppSettings } from './src/core/settings-store';
@@ -336,6 +338,8 @@ function sortedJourneys(journeys: Journey[], sort: JournalSort): Journey[] {
 export default function App(): React.JSX.Element {
 	const colorScheme = useColorScheme();
 	const [settings, setSettings] = useState<AppSettings>(defaultSettings);
+	const playSounds = useRef(false);
+	playSounds.current = settings.playSessionSounds;
 	const [isLoadingSettings, setIsLoadingSettings] = useState(true);
 	const [isSavingSettings, setIsSavingSettings] = useState(false);
 	const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -359,10 +363,12 @@ export default function App(): React.JSX.Element {
 	const [journalSort, setJournalSort] = useState<JournalSort>('newest');
 	const [status, setStatus] = useState('Ready.');
 	const [isRunning, setIsRunning] = useState(false);
+	const [feedbackStatus, setFeedbackStatus] = useState<string | undefined>();
 	const didStopCurrentSession = useRef(false);
 	const activeJourneyID = useRef<string | undefined>(undefined);
 	const activeJourney = useRef<Journey | undefined>(undefined);
 	const runningFileName = useRef<string | undefined>(undefined);
+	const hasStartedFile = useRef(false);
 	const [editingProfileID, setEditingProfileID] = useState<ProfileID | undefined>();
 	const [profileEditor, setProfileEditor] = useState<ProfileEditorValues | undefined>();
 	const [isCreatingProfile, setIsCreatingProfile] = useState(false);
@@ -424,7 +430,7 @@ export default function App(): React.JSX.Element {
 			const journey = activeJourney.current;
 			if (journey !== undefined && recordJourneyFeedback(journey, runningFileName.current, value)) {
 				Vibration.vibrate(value === 1 ? 60 : [0, 60, 80, 60]);
-				setStatus(value === 1 ? 'Recorded: this feels like it is working.' : 'Recorded: this does not feel like it is working.');
+				setFeedbackStatus(value === 1 ? 'Recorded: this feels like it is working.' : 'Recorded: this does not feel like it is working.');
 			}
 		}));
 	}, [isRunning, settings.useVolumeButtonsForFeedback]);
@@ -436,6 +442,22 @@ export default function App(): React.JSX.Element {
 		setIsSavingSettings(true);
 		try {
 			const updatedSettings = { ...settings, useVolumeButtonsForFeedback: useVolumeButtonsForFeedback };
+			await settingsStore.save(updatedSettings);
+			setSettings(updatedSettings);
+		} catch (error) {
+			setStatus(errorMessage(error));
+		} finally {
+			setIsSavingSettings(false);
+		}
+	}
+
+	async function changePlaySessionSounds(playSessionSounds: boolean): Promise<void> {
+		if (isLoadingSettings || isSavingSettings) {
+			return;
+		}
+		setIsSavingSettings(true);
+		try {
+			const updatedSettings = { ...settings, playSessionSounds: playSessionSounds };
 			await settingsStore.save(updatedSettings);
 			setSettings(updatedSettings);
 		} catch (error) {
@@ -554,7 +576,12 @@ export default function App(): React.JSX.Element {
 		};
 		activeJourneyID.current = journey.id;
 		activeJourney.current = journey;
+		setFeedbackStatus(undefined);
 		runningFileName.current = undefined;
+		hasStartedFile.current = false;
+		if (playSounds.current) {
+			playSessionSound('start');
+		}
 		setIsRunning(true);
 		didStopCurrentSession.current = false;
 		setStatus('Session running. Keeping this device awake.');
@@ -566,6 +593,12 @@ export default function App(): React.JSX.Element {
 				await operation(setStatus, function (fileName, data): void {
 					journey.files.push({ fileName: fileName, data: JSON.parse(JSON.stringify(data)) as Record<string, unknown> });
 				}, function (fileName): void {
+					if (fileName !== undefined) {
+						if (playSounds.current && isSwitchingFiles(runningFileName.current, hasStartedFile.current, fileName)) {
+							playSessionSound('switch');
+						}
+						hasStartedFile.current = true;
+					}
 					runningFileName.current = fileName;
 				});
 			});
@@ -576,6 +609,9 @@ export default function App(): React.JSX.Element {
 			setStatus(errorMessage(error));
 		} finally {
 			journey.endedAt = new Date().toISOString();
+			if (playSounds.current) {
+				playSessionSound('end');
+			}
 			try {
 				await journeyStore.save(journey);
 				await loadJourneys();
@@ -685,7 +721,8 @@ export default function App(): React.JSX.Element {
 	async function duplicateProfile(profile: StoredProfile): Promise<void> {
 		try {
 			const copy = await profileStore.save({ ...profile.profile, name: `Copy of ${profile.profile.name}` });
-			await loadProfiles();
+			const sourceFolder = profileLayout.find(function (slot): slot is ProfileFolder { return(slot?.kind === 'folder' && slot.profiles.includes(profile.id)); });
+			await loadProfiles(sourceFolder === undefined ? undefined : { folderID: sourceFolder.id, profileID: copy.id });
 			setStatus(`Created ${copy.profile.name}.`);
 		} catch (error) {
 			setStatus(errorMessage(error));
@@ -1030,6 +1067,7 @@ export default function App(): React.JSX.Element {
 					>
 						<Image source={require('./logo/brainkandi.png')} style={styles.logo} resizeMode="contain" />
 						<Text style={styles.status}>{status}</Text>
+						{isRunning && feedbackStatus !== undefined && <Text style={styles.status} accessibilityLiveRegion="polite">{feedbackStatus}</Text>}
 						<Text style={styles.activeDevice}>Device: {deviceAddress}</Text>
 						{renderStopSessionButton()}
 
@@ -1081,15 +1119,22 @@ export default function App(): React.JSX.Element {
 									</View>
 									<Text style={styles.help}>Use the rounded glass button style instead of standard platform buttons.</Text>
 								</Section>
-								{volumeKeysAvailable() && (
-									<Section title="Sessions">
+								<Section title="Sessions">
+									<View style={styles.settingRow}>
+										<Text style={styles.label}>Play session sounds</Text>
+										<Switch accessibilityLabel="Play session sounds" value={settings.playSessionSounds} disabled={isLoadingSettings || isSavingSettings} onValueChange={function (value): void { void changePlaySessionSounds(value); }} />
+									</View>
+									<Text style={styles.help}>Play a sound when a session starts, when it switches to a different part, and when it ends.</Text>
+									{volumeKeysAvailable() && (
+										<>
 										<View style={styles.settingRow}>
 											<Text style={styles.label}>Use Volume Buttons for feedback</Text>
 											<Switch accessibilityLabel="Use Volume Buttons for feedback" value={settings.useVolumeButtonsForFeedback} disabled={isLoadingSettings || isSavingSettings} onValueChange={function (value): void { void changeUseVolumeButtonsForFeedback(value); }} />
 										</View>
 										<Text style={styles.help}>While a session is running, press Volume Up when the current frequency feels like it is working and Volume Down when it does not. The phone vibrates to confirm, and the feedback appears in the protocol viewer for the journal entry.</Text>
-									</Section>
-								)}
+										</>
+									)}
+								</Section>
 								<Section title="Advanced">
 									<View style={styles.settingRow}>
 										<Text style={styles.label}>Show JSON Code</Text>

@@ -16,7 +16,9 @@
       "./plugins/with-session-background.js",
       "./plugins/with-android-cleartext.js",
       "./plugins/with-volume-keys.js",
-      "expo-sharing"
+      "expo-sharing",
+      "expo-audio",
+      "expo-asset"
     ],
     "android": {
       "package": "org.brainkandi.app",
