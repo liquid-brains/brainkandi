@@ -12,7 +12,7 @@ vi.mock('@react-native-async-storage/async-storage', function () {
 	});
 });
 
-import { AsyncStorageSettingsStore, decapsulateSettings, encapsulateSettings } from './settings-store';
+import { AsyncStorageSettingsStore, decapsulateSettings, defaultSettings, encapsulateSettings } from './settings-store';
 
 beforeEach(function (): void {
 	storage.clear();
@@ -24,11 +24,11 @@ beforeEach(function (): void {
 
 describe('app settings', function () {
 	it('defaults system colors off without existing storage', async function () {
-		expect(await new AsyncStorageSettingsStore().load()).toEqual({ useSystemColors: false, useLiquidGlassButtons: false, showJSONCode: false });
+		expect(await new AsyncStorageSettingsStore().load()).toEqual({ useSystemColors: false, useLiquidGlassButtons: false, showJSONCode: false, useVolumeButtonsForFeedback: false });
 	});
 
 	it.each([false, true])('round-trips useSystemColors %s', async function (useSystemColors) {
-		const settings = { useSystemColors: useSystemColors, useLiquidGlassButtons: false, showJSONCode: false };
+		const settings = { useSystemColors: useSystemColors, useLiquidGlassButtons: false, showJSONCode: false, useVolumeButtonsForFeedback: false };
 		expect(decapsulateSettings(encapsulateSettings(settings))).toEqual(settings);
 		await new AsyncStorageSettingsStore().save(settings);
 		expect(await new AsyncStorageSettingsStore().load()).toEqual(settings);
@@ -36,18 +36,28 @@ describe('app settings', function () {
 
 	it('persists toggling system colors back off', async function () {
 		const store = new AsyncStorageSettingsStore();
-		await store.save({ useSystemColors: true, useLiquidGlassButtons: false, showJSONCode: false });
-		await store.save({ useSystemColors: false, useLiquidGlassButtons: false, showJSONCode: false });
-		expect(await new AsyncStorageSettingsStore().load()).toEqual({ useSystemColors: false, useLiquidGlassButtons: false, showJSONCode: false });
+		await store.save({ useSystemColors: true, useLiquidGlassButtons: false, showJSONCode: false, useVolumeButtonsForFeedback: false });
+		await store.save({ useSystemColors: false, useLiquidGlassButtons: false, showJSONCode: false, useVolumeButtonsForFeedback: false });
+		expect(await new AsyncStorageSettingsStore().load()).toEqual({ useSystemColors: false, useLiquidGlassButtons: false, showJSONCode: false, useVolumeButtonsForFeedback: false });
+	});
+
+	it.each([false, true])('round-trips useVolumeButtonsForFeedback %s', async function (useVolumeButtonsForFeedback) {
+		const settings = { ...defaultSettings, useVolumeButtonsForFeedback: useVolumeButtonsForFeedback };
+		expect(decapsulateSettings(encapsulateSettings(settings))).toEqual(settings);
+	});
+
+	it('defaults volume button feedback to off', function () {
+		expect(defaultSettings.useVolumeButtonsForFeedback).toBe(false);
+		expect(decapsulateSettings('{"version":1,"useSystemColors":false}').useVolumeButtonsForFeedback).toBe(false);
 	});
 
 	it.each([false, true])('round-trips useLiquidGlassButtons %s', async function (useLiquidGlassButtons) {
-		const settings = { useSystemColors: false, useLiquidGlassButtons: useLiquidGlassButtons, showJSONCode: false };
+		const settings = { useSystemColors: false, useLiquidGlassButtons: useLiquidGlassButtons, showJSONCode: false, useVolumeButtonsForFeedback: false };
 		expect(decapsulateSettings(encapsulateSettings(settings))).toEqual(settings);
 	});
 
 	it('defaults liquid glass buttons off for saved settings without the option', function () {
-		expect(decapsulateSettings('{"version":1,"useSystemColors":false}')).toEqual({ useSystemColors: false, useLiquidGlassButtons: false, showJSONCode: false });
+		expect(decapsulateSettings('{"version":1,"useSystemColors":false}')).toEqual({ useSystemColors: false, useLiquidGlassButtons: false, showJSONCode: false, useVolumeButtonsForFeedback: false });
 	});
 
 	it.each(['bad JSON', 'null', '[]', '{"version":2,"useSystemColors":true}', '{"version":1}', '{"version":1,"useSystemColors":"false"}', '{"version":1,"useSystemColors":false,"useLiquidGlassButtons":"true"}'])('reports malformed settings: %s', function (serialized) {
@@ -56,7 +66,7 @@ describe('app settings', function () {
 
 	it('surfaces storage failures without claiming the setting was saved', async function () {
 		setItem.mockRejectedValueOnce(new Error('Storage unavailable.'));
-		await expect(new AsyncStorageSettingsStore().save({ useSystemColors: true, useLiquidGlassButtons: false, showJSONCode: false })).rejects.toThrow('Storage unavailable.');
-		expect(await new AsyncStorageSettingsStore().load()).toEqual({ useSystemColors: false, useLiquidGlassButtons: false, showJSONCode: false });
+		await expect(new AsyncStorageSettingsStore().save({ useSystemColors: true, useLiquidGlassButtons: false, showJSONCode: false, useVolumeButtonsForFeedback: false })).rejects.toThrow('Storage unavailable.');
+		expect(await new AsyncStorageSettingsStore().load()).toEqual({ useSystemColors: false, useLiquidGlassButtons: false, showJSONCode: false, useVolumeButtonsForFeedback: false });
 	});
 });

@@ -12,6 +12,12 @@ export type JourneyFile = {
 	data: Record<string, unknown>;
 };
 
+export type JourneyFeedback = {
+	at: string;
+	value: 1 | -1;
+	fileIndex: number;
+};
+
 export type Journey = {
 	id: string;
 	profile: SessionProfile;
@@ -21,6 +27,7 @@ export type Journey = {
 	rating?: JourneyRating;
 	journalEntry?: string;
 	files: JourneyFile[];
+	feedback?: JourneyFeedback[];
 };
 
 type StoredJourneysDocument = {
@@ -58,11 +65,29 @@ function validateJourney(journey: Journey): void {
 			throw(new Error('Journey has an invalid file.'));
 		}
 	}
+	for (const feedback of journey.feedback ?? []) {
+		if (Number.isNaN(Date.parse(feedback.at)) || (feedback.value !== 1 && feedback.value !== -1) || !Number.isInteger(feedback.fileIndex) || feedback.fileIndex < 0) {
+			throw(new Error('Journey has invalid feedback.'));
+		}
+	}
 	validateProfile(journey.profile);
 }
 
 export function createJourneyID(): string {
 	return(`journey_${Date.now().toString(36)}_${Math.floor(Math.random() * Number.MAX_SAFE_INTEGER).toString(36)}`);
+}
+
+export function recordJourneyFeedback(journey: Journey, fileName: string | undefined, value: 1 | -1, at: Date = new Date()): boolean {
+	if (fileName === undefined) {
+		return(false);
+	}
+	const fileIndex = journey.files.map(function (file): string { return(file.fileName); }).lastIndexOf(fileName);
+	if (fileIndex === -1) {
+		return(false);
+	}
+	journey.feedback ??= [];
+	journey.feedback.push({ at: at.toISOString(), value: value, fileIndex: fileIndex });
+	return(true);
 }
 
 export function retainRatedJourneys(journeys: Journey[], excludedJourneyID?: string): Journey[] {
@@ -127,6 +152,17 @@ export function decapsulateJourneys(serialized: string): Journey[] {
 		}
 		if (typeof value.journalEntry === 'string') {
 			journey.journalEntry = value.journalEntry;
+		}
+		if (value.feedback !== undefined) {
+			if (!Array.isArray(value.feedback)) {
+				throw(new Error('Saved journey feedback has an invalid format.'));
+			}
+			journey.feedback = value.feedback.map(function (item): JourneyFeedback {
+				if (!isRecord(item) || typeof item.at !== 'string' || (item.value !== 1 && item.value !== -1) || typeof item.fileIndex !== 'number') {
+					throw(new Error('Saved journey feedback has an invalid format.'));
+				}
+				return({ at: item.at, value: item.value, fileIndex: item.fileIndex });
+			});
 		}
 		validateJourney(journey);
 		return(journey);

@@ -3,7 +3,7 @@ import { Picker } from '@react-native-picker/picker';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import type { Journey } from '../core/journey-store';
-import { journeyProtocolFiles, protocolDiagramRows, protocolModuleViews, protocolTint } from '../core/protocol-viewer';
+import { feedbackCountsByFile, journeyProtocolFiles, protocolDiagramRows, protocolModuleViews, protocolTint } from '../core/protocol-viewer';
 import type { AppColors } from './colors';
 import { brandColors } from './colors';
 
@@ -12,6 +12,8 @@ export function ProtocolViewer(props: { journey: Journey; colors: AppColors; sho
 	const [jsonExpanded, setJsonExpanded] = useState(false);
 	const files = journeyProtocolFiles(props.journey);
 	const file = files[fileIndex];
+	const feedbackCounts = feedbackCountsByFile(props.journey);
+	const hasFeedback = feedbackCounts.some(function (counts): boolean { return(counts.up + counts.down > 0); });
 	const modules = file === undefined ? undefined : protocolModuleViews(file.data);
 	const styles = createStyles(props.colors);
 	const isBrand = props.colors === brandColors;
@@ -25,12 +27,24 @@ export function ProtocolViewer(props: { journey: Journey; colors: AppColors; sho
 					<Text style={styles.text}>Protocol file</Text>
 					<Picker accessibilityLabel="Protocol file" selectedValue={fileIndex} onValueChange={function (value: number): void { setFileIndex(value); }} style={styles.picker}>
 						{files.map(function (item, index) {
-							return(<Picker.Item key={index} label={`${index + 1}. ${item.fileName}`} value={index} />);
+							return(<Picker.Item key={index} label={`${index + 1}. ${item.fileName}${feedbackLabel(feedbackCounts[index])}`} value={index} />);
 						})}
 					</Picker>
 				</View>
 			)}
 			{file !== undefined && <Text style={styles.fileName}>{file.fileName}</Text>}
+			{hasFeedback && (
+				<View style={styles.feedback}>
+					<Text style={styles.heading}>Feedback during the session</Text>
+					{files.map(function (item, index) {
+						const counts = feedbackCounts[index];
+						if (counts === undefined || counts.up + counts.down === 0) {
+							return(null);
+						}
+						return(<Text key={index} style={index === fileIndex ? styles.feedbackSelected : styles.text}>{files.length > 1 ? `${index + 1}. ${item.fileName}: ` : ''}{`👍 ${counts.up}  👎 ${counts.down}`}</Text>);
+					})}
+				</View>
+			)}
 			{modules === undefined ? (
 				<Text style={styles.text}>{file === undefined ? 'No protocol files were recorded for this journey.' : 'No readable channel parameters were saved for this protocol.'}</Text>
 			) : (
@@ -103,6 +117,10 @@ export function ProtocolViewer(props: { journey: Journey; colors: AppColors; sho
 	);
 }
 
+function feedbackLabel(counts: { up: number; down: number } | undefined): string {
+	return(counts === undefined || counts.up + counts.down === 0 ? '' : `  👍${counts.up} 👎${counts.down}`);
+}
+
 function createStyles(colors: AppColors) {
 	return(StyleSheet.create({
 		viewer: { gap: 12 },
@@ -113,6 +131,8 @@ function createStyles(colors: AppColors) {
 		legend: { alignItems: 'center', borderColor: colors.border, borderRadius: 8, borderWidth: 1, flexDirection: 'row', flexWrap: 'wrap', gap: 16, justifyContent: 'center', padding: 10 },
 		legendItem: { alignItems: 'center', flexDirection: 'row', gap: 6 },
 		swatch: { borderColor: colors.border, borderRadius: 3, borderWidth: 1, height: 18, width: 18 },
+		feedback: { borderColor: colors.border, borderRadius: 8, borderWidth: 1, gap: 4, padding: 10 },
+		feedbackSelected: { color: colors.title, fontWeight: '700', lineHeight: 20 },
 		jsonPanel: { borderColor: colors.border, borderRadius: 8, borderWidth: 1, gap: 8, padding: 10 },
 		jsonHeading: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between' },
 		jsonBox: { backgroundColor: '#0f172a', borderRadius: 7, maxHeight: 320, padding: 12 },

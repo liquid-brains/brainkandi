@@ -14,6 +14,7 @@ import {
 	Switch,
 	Text,
 	TextInput,
+	Vibration,
 	View,
 	useColorScheme
 } from 'react-native';
@@ -33,7 +34,8 @@ import { AsyncStorageDeviceStore } from './src/core/device-store';
 import { AsyncStorageProfileStore } from './src/core/profile-store';
 import { addProfileToFolder, AsyncStorageProfileLayoutStore, reconcileProfileLayout } from './src/core/profile-layout';
 import type { ProfileFolder, ProfileLayout } from './src/core/profile-layout';
-import { AsyncStorageJourneyStore, createJourneyID } from './src/core/journey-store';
+import { AsyncStorageJourneyStore, createJourneyID, recordJourneyFeedback } from './src/core/journey-store';
+import { captureVolumeKeys, volumeKeysAvailable } from './src/core/volume-keys';
 import { AsyncStorageSettingsStore, defaultSettings } from './src/core/settings-store';
 import type { AppSettings } from './src/core/settings-store';
 import { runWithSessionBackground } from './src/core/session-background';
@@ -359,6 +361,8 @@ export default function App(): React.JSX.Element {
 	const [isRunning, setIsRunning] = useState(false);
 	const didStopCurrentSession = useRef(false);
 	const activeJourneyID = useRef<string | undefined>(undefined);
+	const activeJourney = useRef<Journey | undefined>(undefined);
+	const runningFileName = useRef<string | undefined>(undefined);
 	const [editingProfileID, setEditingProfileID] = useState<ProfileID | undefined>();
 	const [profileEditor, setProfileEditor] = useState<ProfileEditorValues | undefined>();
 	const [isCreatingProfile, setIsCreatingProfile] = useState(false);
@@ -403,6 +407,35 @@ export default function App(): React.JSX.Element {
 		setIsSavingSettings(true);
 		try {
 			const updatedSettings = { ...settings, useLiquidGlassButtons: useLiquidGlassButtons };
+			await settingsStore.save(updatedSettings);
+			setSettings(updatedSettings);
+		} catch (error) {
+			setStatus(errorMessage(error));
+		} finally {
+			setIsSavingSettings(false);
+		}
+	}
+
+	useEffect(function (): (() => void) | undefined {
+		if (!isRunning || !settings.useVolumeButtonsForFeedback) {
+			return(undefined);
+		}
+		return(captureVolumeKeys(function (value): void {
+			const journey = activeJourney.current;
+			if (journey !== undefined && recordJourneyFeedback(journey, runningFileName.current, value)) {
+				Vibration.vibrate(value === 1 ? 60 : [0, 60, 80, 60]);
+				setStatus(value === 1 ? 'Recorded: this feels like it is working.' : 'Recorded: this does not feel like it is working.');
+			}
+		}));
+	}, [isRunning, settings.useVolumeButtonsForFeedback]);
+
+	async function changeUseVolumeButtonsForFeedback(useVolumeButtonsForFeedback: boolean): Promise<void> {
+		if (isLoadingSettings || isSavingSettings) {
+			return;
+		}
+		setIsSavingSettings(true);
+		try {
+			const updatedSettings = { ...settings, useVolumeButtonsForFeedback: useVolumeButtonsForFeedback };
 			await settingsStore.save(updatedSettings);
 			setSettings(updatedSettings);
 		} catch (error) {
@@ -508,7 +541,7 @@ export default function App(): React.JSX.Element {
 		void loadDevices();
 	}, [loadDevices, loadJourneys, loadProfiles]);
 
-	const run = useCallback(async function (profile: SessionProfile, operation: (setSessionStatus: (status: string) => void, onGeneratedFile: (fileName: string, data: Record<string, unknown>) => void) => Promise<void>): Promise<void> {
+	const run = useCallback(async function (profile: SessionProfile, operation: (setSessionStatus: (status: string) => void, onGeneratedFile: (fileName: string, data: Record<string, unknown>) => void, onRunningFile: (fileName: string | undefined) => void) => Promise<void>): Promise<void> {
 		if (isRunning) {
 			return;
 		}
@@ -520,6 +553,8 @@ export default function App(): React.JSX.Element {
 			files: initialJourneyFiles(profile)
 		};
 		activeJourneyID.current = journey.id;
+		activeJourney.current = journey;
+		runningFileName.current = undefined;
 		setIsRunning(true);
 		didStopCurrentSession.current = false;
 		setStatus('Session running. Keeping this device awake.');
@@ -530,6 +565,8 @@ export default function App(): React.JSX.Element {
 			await runWithSessionBackground(async function (): Promise<void> {
 				await operation(setStatus, function (fileName, data): void {
 					journey.files.push({ fileName: fileName, data: JSON.parse(JSON.stringify(data)) as Record<string, unknown> });
+				}, function (fileName): void {
+					runningFileName.current = fileName;
 				});
 			});
 			journey.outcome = 'completed';
@@ -545,6 +582,8 @@ export default function App(): React.JSX.Element {
 			} finally {
 				deactivateKeepAwake(keepAwakeTag);
 				activeJourneyID.current = undefined;
+				activeJourney.current = undefined;
+				runningFileName.current = undefined;
 				setIsRunning(false);
 			}
 		}
@@ -560,8 +599,8 @@ export default function App(): React.JSX.Element {
 		try {
 			const resolved = resolveSequenceProfile(profile.profile, profiles);
 			runnableProfileSteps(resolved);
-			void run(resolved, async function (setSessionStatus, onGeneratedFile): Promise<void> {
-				await sessionRunner.runProfile(deviceAddress, resolved, setSessionStatus, onGeneratedFile);
+			void run(resolved, async function (setSessionStatus, onGeneratedFile, onRunningFile): Promise<void> {
+				await sessionRunner.runProfile(deviceAddress, resolved, setSessionStatus, onGeneratedFile, [], onRunningFile);
 			});
 		} catch (error) {
 			setStatus(errorMessage(error));
@@ -1042,6 +1081,15 @@ export default function App(): React.JSX.Element {
 									</View>
 									<Text style={styles.help}>Use the rounded glass button style instead of standard platform buttons.</Text>
 								</Section>
+								{volumeKeysAvailable() && (
+									<Section title="Sessions">
+										<View style={styles.settingRow}>
+											<Text style={styles.label}>Use Volume Buttons for feedback</Text>
+											<Switch accessibilityLabel="Use Volume Buttons for feedback" value={settings.useVolumeButtonsForFeedback} disabled={isLoadingSettings || isSavingSettings} onValueChange={function (value): void { void changeUseVolumeButtonsForFeedback(value); }} />
+										</View>
+										<Text style={styles.help}>While a session is running, press Volume Up when the current frequency feels like it is working and Volume Down when it does not. The phone vibrates to confirm, and the feedback appears in the protocol viewer for the journal entry.</Text>
+									</Section>
+								)}
 								<Section title="Advanced">
 									<View style={styles.settingRow}>
 										<Text style={styles.label}>Show JSON Code</Text>

@@ -15,6 +15,7 @@
     "plugins": [
       "./plugins/with-session-background.js",
       "./plugins/with-android-cleartext.js",
+      "./plugins/with-volume-keys.js",
       "expo-sharing"
     ],
     "android": {
