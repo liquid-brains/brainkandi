@@ -579,9 +579,6 @@ export default function App(): React.JSX.Element {
 		setFeedbackStatus(undefined);
 		runningFileName.current = undefined;
 		hasStartedFile.current = false;
-		if (playSounds.current) {
-			playSessionSound('start');
-		}
 		setIsRunning(true);
 		didStopCurrentSession.current = false;
 		setStatus('Session running. Keeping this device awake.');
@@ -594,8 +591,12 @@ export default function App(): React.JSX.Element {
 					journey.files.push({ fileName: fileName, data: JSON.parse(JSON.stringify(data)) as Record<string, unknown> });
 				}, function (fileName): void {
 					if (fileName !== undefined) {
-						if (playSounds.current && isSwitchingFiles(runningFileName.current, hasStartedFile.current, fileName)) {
-							playSessionSound('switch');
+						if (playSounds.current) {
+							if (!hasStartedFile.current) {
+								playSessionSound('start');
+							} else if (isSwitchingFiles(runningFileName.current, hasStartedFile.current, fileName)) {
+								playSessionSound('switch');
+							}
 						}
 						hasStartedFile.current = true;
 					}
