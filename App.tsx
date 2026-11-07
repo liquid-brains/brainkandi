@@ -1034,7 +1034,7 @@ export default function App(): React.JSX.Element {
 										<Text style={styles.label}>Show JSON Code</Text>
 										<Switch accessibilityLabel="Show JSON Code" value={settings.showJSONCode} disabled={isLoadingSettings || isSavingSettings} onValueChange={function (value): void { void changeShowJSONCode(value); }} />
 									</View>
-									<Text style={styles.help}>Show a collapsed JSON viewer for each protocol file in the protocol viewer.</Text>
+									<Text style={styles.help}>Show JSON in the protocol viewer for journal entries.</Text>
 								</Section>
 								<Section title="Devices">
 									<Text style={styles.label}>IP address of Neuro Pro 2</Text>

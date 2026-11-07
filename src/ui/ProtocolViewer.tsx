@@ -14,7 +14,8 @@ export function ProtocolViewer(props: { journey: Journey; colors: AppColors; sho
 	const file = files[fileIndex];
 	const modules = file === undefined ? undefined : protocolModuleViews(file.data);
 	const styles = createStyles(props.colors);
-	const phaseColors = { A: brandColors.section, B: brandColors.background };
+	const isBrand = props.colors === brandColors;
+	const phaseColors = isBrand ? { A: brandColors.section, B: brandColors.background } : { A: props.colors.accent, B: props.colors.destructive };
 	return(
 		<View style={styles.viewer}>
 			<Text style={styles.title}>{props.journey.profile.name}</Text>
@@ -30,19 +31,6 @@ export function ProtocolViewer(props: { journey: Journey; colors: AppColors; sho
 				</View>
 			)}
 			{file !== undefined && <Text style={styles.fileName}>{file.fileName}</Text>}
-			{props.showJSONCode === true && file !== undefined && (
-				<View style={styles.jsonPanel}>
-					<Pressable accessibilityRole="button" accessibilityState={{ expanded: jsonExpanded }} onPress={function (): void { setJsonExpanded(function (expanded): boolean { return(!expanded); }); }} style={styles.jsonHeading}>
-						<Text style={styles.heading}>JSON</Text>
-						<Text style={styles.text}>{jsonExpanded ? 'Collapse' : 'Expand'}</Text>
-					</Pressable>
-					{jsonExpanded && (
-						<ScrollView style={styles.jsonBox} nestedScrollEnabled>
-							<Text selectable style={styles.jsonText}>{JSON.stringify(file.data, undefined, 2)}</Text>
-						</ScrollView>
-					)}
-				</View>
-			)}
 			{modules === undefined ? (
 				<Text style={styles.text}>{file === undefined ? 'No protocol files were recorded for this journey.' : 'No readable channel parameters were saved for this protocol.'}</Text>
 			) : (
@@ -67,7 +55,7 @@ export function ProtocolViewer(props: { journey: Journey; colors: AppColors; sho
 										return(
 											<View key={name} accessible accessibilityRole="text" accessibilityLabel={`${name}, ${module.inactive ? 'inactive' : `Phase ${module.phase}, ${module.frequency} Hz, ${module.power}%, ${module.runTime} minutes`}`} style={[
 												styles.tile,
-												{ backgroundColor: module.inactive ? props.colors.surface : protocolTint(phaseColors[module.phase], brandColors.surface, module.saturation) },
+												{ backgroundColor: module.inactive ? props.colors.surface : protocolTint(phaseColors[module.phase], props.colors.surface, module.saturation) },
 												crossApplied && styles.crossTile
 											]}>
 												<Text style={[styles.moduleTitle, !module.inactive && styles.activeText]}>{name}</Text>
@@ -98,6 +86,19 @@ export function ProtocolViewer(props: { journey: Journey; colors: AppColors; sho
 					</View>
 				</>
 			)}
+			{props.showJSONCode === true && file !== undefined && (
+				<View style={styles.jsonPanel}>
+					<Pressable accessibilityRole="button" accessibilityState={{ expanded: jsonExpanded }} onPress={function (): void { setJsonExpanded(function (expanded): boolean { return(!expanded); }); }} style={styles.jsonHeading}>
+						<Text style={styles.heading}>JSON</Text>
+						<Text style={styles.text}>{jsonExpanded ? 'Collapse' : 'Expand'}</Text>
+					</Pressable>
+					{jsonExpanded && (
+						<ScrollView style={styles.jsonBox} nestedScrollEnabled>
+							<Text selectable style={styles.jsonText}>{JSON.stringify(file.data, undefined, 2)}</Text>
+						</ScrollView>
+					)}
+				</View>
+			)}
 		</View>
 	);
 }
@@ -122,12 +123,12 @@ function createStyles(colors: AppColors) {
 		tile: { alignItems: 'center', borderColor: colors.border, borderRadius: 7, borderWidth: 1, justifyContent: 'center', minHeight: 70, padding: 4, width: '31%' },
 		crossTile: { borderColor: colors.text, borderWidth: 4 },
 		moduleTitle: { color: colors.text, fontSize: 22, fontWeight: '800' },
-		activeText: { color: brandColors.text },
+		activeText: { color: colors.text },
 		subtitle: { color: colors.text, fontSize: 12, textAlign: 'center' },
 		table: { backgroundColor: colors.section, borderColor: colors.border, borderRadius: 8, borderWidth: 1, padding: 6 },
 		tableRow: { alignItems: 'center', borderBottomColor: colors.border, borderBottomWidth: StyleSheet.hairlineWidth, flexDirection: 'row', paddingVertical: 10 },
 		cell: { color: colors.text, flex: 1, fontSize: 12, textAlign: 'center' },
-		ledName: { color: brandColors.background, fontWeight: '800' },
+		ledName: { color: colors === brandColors ? brandColors.background : colors.destructive, fontWeight: '800' },
 		tableHeading: { color: colors.accent, fontSize: 10, fontWeight: '800' }
 	}));
 }
