@@ -15,7 +15,7 @@ export function ProtocolViewer(props: { journey: Journey; colors: AppColors; sho
 	const modules = file === undefined ? undefined : protocolModuleViews(file.data);
 	const styles = createStyles(props.colors);
 	const isBrand = props.colors === brandColors;
-	const phaseColors = isBrand ? { A: brandColors.section, B: brandColors.background } : { A: props.colors.accent, B: props.colors.destructive };
+	const phaseColors = isBrand ? { A: brandColors.section, B: brandColors.background } : (props.colors.background === '#121212' ? { A: '#5f7f9e', B: '#9a6477' } : { A: '#8fa8bf', B: '#c4a0ad' });
 	return(
 		<View style={styles.viewer}>
 			<Text style={styles.title}>{props.journey.profile.name}</Text>
@@ -128,7 +128,7 @@ function createStyles(colors: AppColors) {
 		table: { backgroundColor: colors.section, borderColor: colors.border, borderRadius: 8, borderWidth: 1, padding: 6 },
 		tableRow: { alignItems: 'center', borderBottomColor: colors.border, borderBottomWidth: StyleSheet.hairlineWidth, flexDirection: 'row', paddingVertical: 10 },
 		cell: { color: colors.text, flex: 1, fontSize: 12, textAlign: 'center' },
-		ledName: { color: colors === brandColors ? brandColors.background : colors.destructive, fontWeight: '800' },
+		ledName: { color: colors === brandColors ? brandColors.background : colors.title, fontWeight: '800' },
 		tableHeading: { color: colors.accent, fontSize: 10, fontWeight: '800' }
 	}));
 }
