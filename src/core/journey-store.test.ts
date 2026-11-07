@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { decapsulateJourneys, encapsulateJourneys, retainRatedJourneys } from './journey-store';
+import { decapsulateJourneys, encapsulateJourneys, recordJourneyFeedback, retainRatedJourneys } from './journey-store';
 import type { Journey } from './journey-store';
 
 describe('journey serialization', function () {
@@ -27,6 +27,41 @@ describe('journey serialization', function () {
 		}];
 
 		expect(decapsulateJourneys(encapsulateJourneys(journeys))).toEqual(journeys);
+	});
+
+	it('records feedback against the most recent file with the running name and round-trips it', function () {
+		const journey: Journey = {
+			id: 'journey-1',
+			profile: { kind: 'random', name: 'Snapshot', parameters: { duration: 5, frequency: { ranges: [{ min: 10 }] }, power: { min: 1 } } },
+			startedAt: '2026-10-04T21:00:00.000Z',
+			outcome: 'running',
+			files: [{ fileName: 'a.vnp0', data: {} }, { fileName: 'b.vnp0', data: {} }, { fileName: 'a.vnp0', data: {} }]
+		};
+		expect(recordJourneyFeedback(journey, 'a.vnp0', 1, new Date('2026-10-04T21:01:00.000Z'))).toBe(true);
+		expect(recordJourneyFeedback(journey, 'b.vnp0', -1, new Date('2026-10-04T21:02:00.000Z'))).toBe(true);
+		expect(recordJourneyFeedback(journey, undefined, 1)).toBe(false);
+		expect(recordJourneyFeedback(journey, 'missing.vnp0', 1)).toBe(false);
+		expect(journey.feedback).toEqual([
+			{ at: '2026-10-04T21:01:00.000Z', value: 1, fileIndex: 2 },
+			{ at: '2026-10-04T21:02:00.000Z', value: -1, fileIndex: 1 }
+		]);
+		expect(decapsulateJourneys(encapsulateJourneys([journey]))).toEqual([journey]);
+	});
+
+	it('rejects invalid saved feedback', function () {
+		expect(function (): void {
+			decapsulateJourneys(JSON.stringify({
+				version: 1,
+				journeys: [{
+					id: 'journey-1',
+					profile: { kind: 'random', name: 'Snapshot', parameters: { duration: 5, frequency: { ranges: [{ min: 10 }] }, power: { min: 1 } } },
+					startedAt: '2026-10-04T21:00:00.000Z',
+					outcome: 'completed',
+					files: [],
+					feedback: [{ at: '2026-10-04T21:00:00.000Z', value: 2, fileIndex: 0 }]
+				}]
+			}));
+		}).toThrow('invalid format');
 	});
 
 	it('rejects a journey with an unsupported outcome', function () {

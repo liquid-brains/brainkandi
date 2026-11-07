@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { Journey } from './journey-store';
-import { journeyProtocolFiles, normalizePhase, protocolDiagramRows, protocolModuleViews, protocolTint } from './protocol-viewer';
+import { feedbackCountsByFile, journeyProtocolFiles, normalizePhase, protocolDiagramRows, protocolModuleViews, protocolTint } from './protocol-viewer';
 
 describe('protocol viewer', function () {
 	it('uses Brain Broccoli anatomical positions and device channel numbers, not array order', function () {
@@ -89,5 +89,24 @@ describe('protocol viewer', function () {
 		expect(journeyProtocolFiles(journey)).toBe(journey.files);
 		expect(journeyProtocolFiles({ ...journey, files: [] })).toEqual([{ fileName: 'saved.vnp0', data: { modules: [] } }]);
 		expect(journeyProtocolFiles({ ...journey, files: [], profile: { kind: 'rest', name: 'Rest', seconds: 60 } })).toEqual([]);
+	});
+});
+
+describe('feedback counts', function () {
+	it('tallies thumbs per protocol file and ignores unknown files', function () {
+		const journey: Journey = {
+			id: 'j',
+			profile: { kind: 'file', name: 'P', fileName: 'a.vnp0', fileData: {} },
+			startedAt: '2026-10-04T21:00:00.000Z',
+			outcome: 'completed',
+			files: [{ fileName: 'a.vnp0', data: {} }, { fileName: 'b.vnp0', data: {} }],
+			feedback: [
+				{ at: '2026-10-04T21:00:01.000Z', value: 1, fileIndex: 1 },
+				{ at: '2026-10-04T21:00:02.000Z', value: 1, fileIndex: 1 },
+				{ at: '2026-10-04T21:00:03.000Z', value: -1, fileIndex: 0 },
+				{ at: '2026-10-04T21:00:04.000Z', value: -1, fileIndex: 9 }
+			]
+		};
+		expect(feedbackCountsByFile(journey)).toEqual([{ up: 0, down: 1 }, { up: 2, down: 0 }]);
 	});
 });

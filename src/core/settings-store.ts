@@ -4,9 +4,10 @@ export type AppSettings = {
 	useSystemColors: boolean;
 	useLiquidGlassButtons: boolean;
 	showJSONCode: boolean;
+	useVolumeButtonsForFeedback: boolean;
 };
 
-export const defaultSettings: AppSettings = { useSystemColors: false, useLiquidGlassButtons: false, showJSONCode: false };
+export const defaultSettings: AppSettings = { useSystemColors: false, useLiquidGlassButtons: false, showJSONCode: false, useVolumeButtonsForFeedback: false };
 const settingsStorageKey = 'brainkandi.settings.v1';
 
 export function encapsulateSettings(settings: AppSettings): string {
@@ -19,7 +20,10 @@ export function encapsulateSettings(settings: AppSettings): string {
 	if (typeof settings.showJSONCode !== 'boolean') {
 		throw(new Error('Show JSON code must be a boolean.'));
 	}
-	return(JSON.stringify({ version: 1, useSystemColors: settings.useSystemColors, useLiquidGlassButtons: settings.useLiquidGlassButtons, showJSONCode: settings.showJSONCode }));
+	if (typeof settings.useVolumeButtonsForFeedback !== 'boolean') {
+		throw(new Error('Use volume buttons for feedback must be a boolean.'));
+	}
+	return(JSON.stringify({ version: 1, useSystemColors: settings.useSystemColors, useLiquidGlassButtons: settings.useLiquidGlassButtons, showJSONCode: settings.showJSONCode, useVolumeButtonsForFeedback: settings.useVolumeButtonsForFeedback }));
 }
 
 export function decapsulateSettings(serialized: string): AppSettings {
@@ -38,10 +42,14 @@ export function decapsulateSettings(serialized: string): AppSettings {
 	if ('showJSONCode' in value && typeof value.showJSONCode !== 'boolean') {
 		throw(new Error('Saved show JSON code setting is invalid.'));
 	}
+	if ('useVolumeButtonsForFeedback' in value && typeof value.useVolumeButtonsForFeedback !== 'boolean') {
+		throw(new Error('Saved volume button feedback setting is invalid.'));
+	}
 	return({
 		useSystemColors: value.useSystemColors,
 		useLiquidGlassButtons: 'useLiquidGlassButtons' in value ? value.useLiquidGlassButtons === true : false,
-		showJSONCode: 'showJSONCode' in value ? value.showJSONCode === true : false
+		showJSONCode: 'showJSONCode' in value ? value.showJSONCode === true : false,
+		useVolumeButtonsForFeedback: 'useVolumeButtonsForFeedback' in value ? value.useVolumeButtonsForFeedback === true : false
 	});
 }
 

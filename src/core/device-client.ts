@@ -55,7 +55,7 @@ export class SessionRunner {
 
 	public constructor(private readonly deviceFactory: SessionDeviceFactory) {}
 
-	public async runProfile(deviceAddress: string, profile: SessionProfile, onStatus?: (status: string) => void, onGeneratedFile?: (fileName: string, data: Record<string, unknown>) => void, profiles: StoredProfile[] = []): Promise<void> {
+	public async runProfile(deviceAddress: string, profile: SessionProfile, onStatus?: (status: string) => void, onGeneratedFile?: (fileName: string, data: Record<string, unknown>) => void, profiles: StoredProfile[] = [], onRunningFile?: (fileName: string | undefined) => void): Promise<void> {
 		const steps = runnableProfileSteps(profile, profiles);
 		const device = this.deviceFactory.connect(deviceAddress);
 		this.beginSession(device);
@@ -76,12 +76,14 @@ export class SessionRunner {
 						if (profile.kind === 'sequence') {
 							onGeneratedFile?.(step.fileName, step.fileData);
 						}
+						onRunningFile?.(step.fileName);
 						await device.runFileFromData(step.fileName, step.fileData, { signal: this.activeSessionSignal() });
 						break;
 					case 'random':
-						await this.runRandom(device, randomParametersFromProfile(step), setStatus, onGeneratedFile);
+						await this.runRandom(device, randomParametersFromProfile(step), setStatus, onGeneratedFile, onRunningFile);
 						break;
 					case 'rest':
+						onRunningFile?.(undefined);
 						onStatus?.(`Resting for ${step.seconds} second(s).`);
 						await this.waitForRest(step);
 						break;
@@ -143,7 +145,7 @@ export class SessionRunner {
 		});
 	}
 
-	private async runRandom(device: SessionDevice, parameters: RandomSessionParameters, onStatus?: (status: string) => void, onGeneratedFile?: (fileName: string, data: Record<string, unknown>) => void): Promise<void> {
+	private async runRandom(device: SessionDevice, parameters: RandomSessionParameters, onStatus?: (status: string) => void, onGeneratedFile?: (fileName: string, data: Record<string, unknown>) => void, onRunningFile?: (fileName: string | undefined) => void): Promise<void> {
 		const fixedSessionStatuses = new Map<string, string>();
 		const listenerIDs = [
 			device.on('run-random-start', function (event): void {
@@ -158,10 +160,12 @@ export class SessionRunner {
 				onStatus?.(`Uploaded session part ${event.fileIndex} of ${event.fileCount}.`);
 			}),
 			device.on('run-random-run-start-file', function (event): void {
+				onRunningFile?.(event.fileName);
 				const fixedStatus = fixedSessionStatuses.get(event.fileName);
 				onStatus?.(`Running session part ${event.fileIndex} of ${event.fileCount}.${fixedStatus === undefined || fixedStatus === '' ? '' : ` ${fixedStatus}.`}`);
 			}),
 			device.on('run-random-run-finish-file', function (event): void {
+				onRunningFile?.(undefined);
 				onStatus?.(`Finished session part ${event.fileIndex} of ${event.fileCount}.`);
 			})
 		];

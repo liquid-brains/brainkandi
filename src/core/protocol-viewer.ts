@@ -132,3 +132,20 @@ export function protocolTint(color: string, surface: string, saturation: number)
 	});
 	return(`rgb(${channels.join(',')})`);
 }
+
+export type FeedbackCounts = { up: number; down: number };
+
+export function feedbackCountsByFile(journey: Journey): FeedbackCounts[] {
+	const counts = journeyProtocolFiles(journey).map(function (): FeedbackCounts { return({ up: 0, down: 0 }); });
+	for (const feedback of journey.feedback ?? []) {
+		const entry = counts[feedback.fileIndex];
+		if (entry !== undefined) {
+			if (feedback.value > 0) {
+				entry.up += 1;
+			} else {
+				entry.down += 1;
+			}
+		}
+	}
+	return(counts);
+}
