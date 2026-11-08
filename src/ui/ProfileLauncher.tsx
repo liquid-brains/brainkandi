@@ -21,9 +21,10 @@ export function ProfileLauncher(props: {
 	onChange: (layout: ProfileLayout) => void;
 	renderProfile: (profile: StoredProfile) => React.JSX.Element;
 	onDragging: (dragging: boolean) => void;
+	isNamingFolder: boolean;
+	onNamingFolderChange: (isNaming: boolean) => void;
 }): React.JSX.Element {
 	const [drag, setDrag] = useState<Drag>();
-	const [isNamingFolder, setIsNamingFolder] = useState(false);
 	const [newFolderName, setNewFolderName] = useState('');
 	const container = useRef<View>(null);
 	const containerOrigin = useRef({ x: 0, y: 0 });
@@ -140,13 +141,19 @@ export function ProfileLauncher(props: {
 		}
 	}
 
+	useEffect(function () {
+		if (props.isNamingFolder) {
+			setNewFolderName('');
+		}
+	}, [props.isNamingFolder]);
+
 	function createFolder(): void {
 		const name = newFolderName.trim();
 		if (name === '') {
 			return;
 		}
 		props.onChange(addProfileFolder(props.layout, createProfileID(), name));
-		setIsNamingFolder(false);
+		props.onNamingFolderChange(false);
 		setNewFolderName('');
 	}
 
@@ -187,7 +194,6 @@ export function ProfileLauncher(props: {
 			onTouchCancel={cancelDrag}
 			onPointerUp={finishDrag}
 		>
-			<ButtonComponent title="New folder" disabled={props.disabled} onPress={function (): void { setNewFolderName(''); setIsNamingFolder(true); }} />
 			{folders.map(function (folder): React.JSX.Element {
 				return(
 					<View key={folder.id} ref={register(`zone:${folder.id}`)} collapsable={false} style={[styles.folder, drag !== undefined && styles.folderTarget]}>
@@ -214,13 +220,13 @@ export function ProfileLauncher(props: {
 			{drag !== undefined && draggedProfile !== undefined && <View pointerEvents="none" style={[styles.floating, { left: Math.max(0, drag.x - 45), top: Math.max(0, drag.y - 35) }]}>
 				<Text numberOfLines={2} style={styles.name}>{draggedProfile.profile.name}</Text>
 			</View>}
-			<Modal transparent animationType="fade" visible={isNamingFolder} onRequestClose={function (): void { setIsNamingFolder(false); }}>
+			<Modal transparent animationType="fade" visible={props.isNamingFolder} onRequestClose={function (): void { props.onNamingFolderChange(false); }}>
 				<View style={styles.backdrop}>
 					<View style={styles.dialog}>
 						<Text style={styles.name}>New folder</Text>
 						<TextInput accessibilityLabel="Folder name" autoFocus placeholder="Folder name" placeholderTextColor={props.colors.text} value={newFolderName} onChangeText={setNewFolderName} onSubmitEditing={createFolder} style={styles.input} />
 						<ButtonComponent title="Create folder" disabled={newFolderName.trim() === ''} onPress={createFolder} />
-						<ButtonComponent title="Cancel" onPress={function (): void { setIsNamingFolder(false); }} />
+						<ButtonComponent title="Cancel" onPress={function (): void { props.onNamingFolderChange(false); }} />
 					</View>
 				</View>
 			</Modal>

@@ -366,6 +366,7 @@ export default function App(): React.JSX.Element {
 	const [profileLayout, setProfileLayout] = useState<ProfileLayout>([]);
 	const [isLoadingProfiles, setIsLoadingProfiles] = useState(true);
 	const [isSavingLayout, setIsSavingLayout] = useState(false);
+	const [isNamingProfileFolder, setIsNamingProfileFolder] = useState(false);
 	const [isDraggingProfile, setIsDraggingProfile] = useState(false);
 	const [journeys, setJourneys] = useState<Journey[]>([]);
 	const [isJournalBrowserOpen, setIsJournalBrowserOpen] = useState(false);
@@ -1122,9 +1123,11 @@ export default function App(): React.JSX.Element {
 						{renderStopSessionButton()}
 
 						<View style={isRunning ? styles.hidden : styles.sectionGroup}>
-						<Section title="Profiles">
-							<Button title="New profile" disabled={isRunning || isLoadingProfiles || isSavingLayout} onPress={openProfileCreation} />
-							<Button title="Import profile file" disabled={isRunning || isLoadingProfiles || isSavingLayout} onPress={function (): void { void importProfileFile(); }} />
+						<Section title="Profiles" menuItems={[
+							{ label: 'New profile', disabled: isRunning || isLoadingProfiles || isSavingLayout, onPress: openProfileCreation },
+							{ label: 'Import profile file', disabled: isRunning || isLoadingProfiles || isSavingLayout, onPress: function (): void { void importProfileFile(); } },
+							{ label: 'New folder', disabled: isRunning || isLoadingProfiles || isSavingLayout, onPress: function (): void { setIsNamingProfileFolder(true); } }
+						]}>
 							<ProfileLauncher
 								profiles={profiles}
 								layout={profileLayout}
@@ -1134,6 +1137,8 @@ export default function App(): React.JSX.Element {
 								onChange={function (layout): void { void saveProfileLayout(layout); }}
 								renderProfile={renderProfile}
 								onDragging={setIsDraggingProfile}
+								isNamingFolder={isNamingProfileFolder}
+								onNamingFolderChange={setIsNamingProfileFolder}
 							/>
 							{renderEmptyProfiles()}
 						</Section>
@@ -1323,12 +1328,37 @@ function Button({ title, color: requestedColor, disabled = false, onPress, ...pr
 	);
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }): React.JSX.Element {
+type SectionMenuItem = { label: string; disabled?: boolean; onPress: () => void };
+
+function Section({ title, children, menuItems }: { title: string; children: React.ReactNode; menuItems?: SectionMenuItem[] }): React.JSX.Element {
 	const { styles, useLiquidGlassButtons } = useContext(ThemeContext);
+	const [isMenuOpen, setIsMenuOpen] = useState(false);
+	const header = (
+		<>
+			<Text style={[styles.sectionTitle, menuItems !== undefined && styles.sectionTitleWithMenu]}>{title}</Text>
+			{menuItems !== undefined && (
+				<Pressable accessibilityRole="button" accessibilityLabel={`${title} actions`} onPress={function (): void { setIsMenuOpen(!isMenuOpen); }} style={styles.sectionMenuButton}>
+					<Text style={styles.journeyMenuGlyph}>⋮</Text>
+				</Pressable>
+			)}
+			{menuItems !== undefined && isMenuOpen && (
+				<View style={styles.sectionMenu}>
+					{menuItems.map(function (item): React.JSX.Element {
+						return(
+							<Pressable key={item.label} accessibilityRole="menuitem" disabled={item.disabled === true} onPress={function (): void { setIsMenuOpen(false); item.onPress(); }} style={styles.journeyMenuItem}>
+								<Text style={[styles.journeyMenuText, item.disabled === true ? styles.journeyMenuDisabled : undefined]}>{item.label}</Text>
+							</Pressable>
+						);
+					})}
+				</View>
+			)}
+		</>
+	);
+	const sectionStyle = isMenuOpen ? styles.sectionMenuOpen : undefined;
 	if (!useLiquidGlassButtons) {
 		return(
-			<View key="standard-section" style={styles.section}>
-				<Text style={styles.sectionTitle}>{title}</Text>
+			<View key="standard-section" style={[styles.section, sectionStyle]}>
+				{header}
 				{children}
 			</View>
 		);
@@ -1336,9 +1366,9 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 	return(
 		<View key="liquid-glass-section" style={styles.sectionLift}>
 			<View pointerEvents="none" style={styles.sectionDropShadow} />
-			<View style={[styles.section, styles.sectionGlass, webLiquidGlassStyle]}>
+			<View style={[styles.section, styles.sectionGlass, webLiquidGlassStyle, sectionStyle]}>
 				<View pointerEvents="none" style={styles.sectionGlassHighlight} />
-				<Text style={styles.sectionTitle}>{title}</Text>
+				{header}
 				{children}
 			</View>
 		</View>
@@ -1790,6 +1820,10 @@ function createStyles(colors: AppColors) {
 	sectionDropShadow: { backgroundColor: 'rgba(77, 20, 48, 0.42)', borderRadius: 18, bottom: 8, left: 4, position: 'absolute', right: 0, top: 0 },
 	sectionGlass: { borderColor: 'rgba(255, 255, 255, 0.72)', borderWidth: 1, elevation: 4 },
 	sectionGlassHighlight: { backgroundColor: 'rgba(255, 255, 255, 0.28)', borderRadius: 14, height: '30%', left: 5, position: 'absolute', right: 5, top: 3 },
+	sectionTitleWithMenu: { paddingRight: 36 },
+	sectionMenuButton: { position: 'absolute', top: 10, right: 8, paddingHorizontal: 10, paddingVertical: 4, zIndex: 11 },
+	sectionMenu: { position: 'absolute', top: 44, right: 12, backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1, borderRadius: 8, elevation: 8, zIndex: 12, shadowColor: '#000', shadowOpacity: 0.25, shadowRadius: 6, shadowOffset: { width: 0, height: 2 }, minWidth: 190 },
+	sectionMenuOpen: { minHeight: 190 },
 	sectionTitle: { color: colors.title, fontSize: 21, fontWeight: '700' },
 	help: { color: colors.text, lineHeight: 20 },
 	field: { gap: 4 },
