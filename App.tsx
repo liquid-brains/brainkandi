@@ -35,7 +35,7 @@ import { AsyncStorageProfileStore } from './src/core/profile-store';
 import { addProfileToFolder, AsyncStorageProfileLayoutStore, reconcileProfileLayout } from './src/core/profile-layout';
 import type { ProfileFolder, ProfileLayout } from './src/core/profile-layout';
 import { AsyncStorageJourneyStore, createJourneyID, recordJourneyFeedback } from './src/core/journey-store';
-import { playSessionSound } from './src/core/session-sounds';
+import { playSessionSound, vibrateForSessionEvent, vibrationAvailable } from './src/core/session-sounds';
 import { isSwitchingFiles } from './src/core/session-switching';
 import { captureVolumeKeys, volumeKeysAvailable } from './src/core/volume-keys';
 import { AsyncStorageSettingsStore, defaultSettings } from './src/core/settings-store';
@@ -340,6 +340,16 @@ export default function App(): React.JSX.Element {
 	const [settings, setSettings] = useState<AppSettings>(defaultSettings);
 	const playSounds = useRef(false);
 	playSounds.current = settings.playSessionSounds;
+	const vibrates = useRef(false);
+	vibrates.current = settings.vibrateOnSessionEvents;
+	function signalSessionEvent(event: 'start' | 'switch' | 'end'): void {
+		if (playSounds.current) {
+			playSessionSound(event);
+		}
+		if (vibrates.current) {
+			vibrateForSessionEvent(event);
+		}
+	}
 	const [isLoadingSettings, setIsLoadingSettings] = useState(true);
 	const [isSavingSettings, setIsSavingSettings] = useState(false);
 	const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -374,6 +384,8 @@ export default function App(): React.JSX.Element {
 	const [isCreatingProfile, setIsCreatingProfile] = useState(false);
 	const [journalEntryJourney, setJournalEntryJourney] = useState<Journey | undefined>();
 	const [journalEntryText, setJournalEntryText] = useState('');
+	const [menuProfileID, setMenuProfileID] = useState<string | undefined>();
+	const [menuJourneyID, setMenuJourneyID] = useState<string | undefined>();
 	const [parametersJourney, setParametersJourney] = useState<Journey | undefined>();
 
 	useEffect(function (): void {
@@ -442,6 +454,22 @@ export default function App(): React.JSX.Element {
 		setIsSavingSettings(true);
 		try {
 			const updatedSettings = { ...settings, useVolumeButtonsForFeedback: useVolumeButtonsForFeedback };
+			await settingsStore.save(updatedSettings);
+			setSettings(updatedSettings);
+		} catch (error) {
+			setStatus(errorMessage(error));
+		} finally {
+			setIsSavingSettings(false);
+		}
+	}
+
+	async function changeVibrateOnSessionEvents(vibrateOnSessionEvents: boolean): Promise<void> {
+		if (isLoadingSettings || isSavingSettings) {
+			return;
+		}
+		setIsSavingSettings(true);
+		try {
+			const updatedSettings = { ...settings, vibrateOnSessionEvents: vibrateOnSessionEvents };
 			await settingsStore.save(updatedSettings);
 			setSettings(updatedSettings);
 		} catch (error) {
@@ -591,12 +619,10 @@ export default function App(): React.JSX.Element {
 					journey.files.push({ fileName: fileName, data: JSON.parse(JSON.stringify(data)) as Record<string, unknown> });
 				}, function (fileName): void {
 					if (fileName !== undefined) {
-						if (playSounds.current) {
-							if (!hasStartedFile.current) {
-								playSessionSound('start');
-							} else if (isSwitchingFiles(runningFileName.current, hasStartedFile.current, fileName)) {
-								playSessionSound('switch');
-							}
+						if (!hasStartedFile.current) {
+							signalSessionEvent('start');
+						} else if (isSwitchingFiles(runningFileName.current, hasStartedFile.current, fileName)) {
+							signalSessionEvent('switch');
 						}
 						hasStartedFile.current = true;
 					}
@@ -610,9 +636,7 @@ export default function App(): React.JSX.Element {
 			setStatus(errorMessage(error));
 		} finally {
 			journey.endedAt = new Date().toISOString();
-			if (playSounds.current) {
-				playSessionSound('end');
-			}
+			signalSessionEvent('end');
 			try {
 				await journeyStore.save(journey);
 				await loadJourneys();
@@ -968,8 +992,24 @@ export default function App(): React.JSX.Element {
 			}
 		}
 		return(
-			<View style={styles.profile}>
-				<View style={styles.profileText}>
+			<View style={[styles.profile, menuProfileID === item.id ? styles.journeyMenuOpen : undefined]}>
+				<Pressable accessibilityRole="button" accessibilityLabel="Profile actions" onPress={function (): void { setMenuProfileID(menuProfileID === item.id ? undefined : item.id); }} style={styles.journeyMenuButton}>
+					<Text style={styles.journeyMenuGlyph}>⋮</Text>
+				</Pressable>
+				{menuProfileID === item.id && (
+					<View style={styles.journeyMenu}>
+						<Pressable accessibilityRole="menuitem" disabled={isRunning} onPress={function (): void { setMenuProfileID(undefined); void duplicateProfile(item); }} style={styles.journeyMenuItem}>
+							<Text style={[styles.journeyMenuText, isRunning ? styles.journeyMenuDisabled : undefined]}>Make a copy</Text>
+						</Pressable>
+						<Pressable accessibilityRole="menuitem" disabled={isRunning} onPress={function (): void { setMenuProfileID(undefined); void exportProfile(item); }} style={styles.journeyMenuItem}>
+							<Text style={[styles.journeyMenuText, isRunning ? styles.journeyMenuDisabled : undefined]}>Export file</Text>
+						</Pressable>
+						<Pressable accessibilityRole="menuitem" disabled={isRunning} onPress={function (): void { setMenuProfileID(undefined); void deleteProfile(item); }} style={styles.journeyMenuItem}>
+							<Text style={[styles.journeyMenuText, styles.journeyMenuDelete, isRunning ? styles.journeyMenuDisabled : undefined]}>Delete</Text>
+						</Pressable>
+					</View>
+				)}
+				<View style={[styles.profileText, styles.journeyText]}>
 					<Text style={styles.profileName}>{item.profile.name}</Text>
 					<Text style={styles.profileDescription}>{profileDescription(item.profile)}</Text>
 					{item.profile.description === undefined ? null : <Text style={styles.profileDescription}>{item.profile.description}</Text>}
@@ -977,12 +1017,9 @@ export default function App(): React.JSX.Element {
 					{sequenceError !== undefined && <Text style={styles.fieldError}>Cannot run: {sequenceError}</Text>}
 					{item.profile.kind === 'sequence' && <SequenceSteps steps={item.profile.steps} profiles={profiles} />}
 				</View>
-				<View style={styles.profileButtons}>
+				<View style={[styles.profileButtons, styles.journeyText]}>
 					<Button title="Run" disabled={isRunning || item.profile.kind === 'ai' || validationErrors.length > 0 || sequenceError !== undefined} onPress={function (): void { runSavedProfile(item); }} />
 					<Button title="View / edit" disabled={isRunning} onPress={function (): void { openProfileEditor(item); }} />
-					<Button title="Make a copy" disabled={isRunning} onPress={function (): void { void duplicateProfile(item); }} />
-					<Button title="Export file" disabled={isRunning} onPress={function (): void { void exportProfile(item); }} />
-					<Button title="Delete" color="#75113d" disabled={isRunning} onPress={function (): void { void deleteProfile(item); }} />
 				</View>
 			</View>
 		);
@@ -990,8 +1027,24 @@ export default function App(): React.JSX.Element {
 
 	function renderJourney(journey: Journey): React.JSX.Element {
 		return(
-			<View key={journey.id} style={styles.journey}>
-				<View style={styles.profileText}>
+			<View key={journey.id} style={[styles.journey, menuJourneyID === journey.id ? styles.journeyMenuOpen : undefined]}>
+				<Pressable accessibilityRole="button" accessibilityLabel="Journal entry actions" onPress={function (): void { setMenuJourneyID(menuJourneyID === journey.id ? undefined : journey.id); }} style={styles.journeyMenuButton}>
+					<Text style={styles.journeyMenuGlyph}>⋮</Text>
+				</Pressable>
+				{menuJourneyID === journey.id && (
+					<View style={styles.journeyMenu}>
+						<Pressable accessibilityRole="menuitem" disabled={journey.outcome === 'running'} onPress={function (): void { setMenuJourneyID(undefined); setParametersJourney(journey); }} style={styles.journeyMenuItem}>
+							<Text style={[styles.journeyMenuText, journey.outcome === 'running' ? styles.journeyMenuDisabled : undefined]}>View parameters</Text>
+						</Pressable>
+						<Pressable accessibilityRole="menuitem" disabled={journey.outcome === 'running' || isRunning} onPress={function (): void { setMenuJourneyID(undefined); void createProfileFromJourney(journey); }} style={styles.journeyMenuItem}>
+							<Text style={[styles.journeyMenuText, journey.outcome === 'running' || isRunning ? styles.journeyMenuDisabled : undefined]}>Copy to new profile</Text>
+						</Pressable>
+						<Pressable accessibilityRole="menuitem" disabled={journey.id === activeJourneyID.current} onPress={function (): void { setMenuJourneyID(undefined); void deleteJourney(journey); }} style={styles.journeyMenuItem}>
+							<Text style={[styles.journeyMenuText, styles.journeyMenuDelete, journey.id === activeJourneyID.current ? styles.journeyMenuDisabled : undefined]}>Delete</Text>
+						</Pressable>
+					</View>
+				)}
+				<View style={[styles.profileText, styles.journeyText]}>
 					<Text style={styles.profileName}>{journey.profile.name}</Text>
 					<Text style={styles.profileDescription}>{profileDescription(journey.profile)}</Text>
 					{journey.profile.description === undefined ? null : <Text style={styles.profileDescription}>{journey.profile.description}</Text>}
@@ -999,13 +1052,10 @@ export default function App(): React.JSX.Element {
 					<Text style={styles.profileDescription}>{journey.files.length} file(s) recorded.</Text>
 					{journey.journalEntry === undefined ? null : <Text style={styles.journalEntry}>{journey.journalEntry}</Text>}
 				</View>
-				<View style={styles.profileButtons}>
+				<View style={[styles.profileButtons, styles.journeyText]}>
 					<JourneyRatingButton thumb="👍" count={journey.rating !== undefined && journey.rating > 0 ? journey.rating : 1} color={journey.rating !== undefined && journey.rating > 0 ? '#198754' : '#666'} disabled={journey.outcome === 'running'} onPress={function (): void { void rateJourney(journey, 1); }} />
 					<JourneyRatingButton thumb="👎" count={journey.rating !== undefined && journey.rating < 0 ? Math.abs(journey.rating) : 1} color={journey.rating !== undefined && journey.rating < 0 ? '#c62828' : '#666'} disabled={journey.outcome === 'running'} onPress={function (): void { void rateJourney(journey, -1); }} />
 					<Button title="Journal entry" disabled={journey.outcome === 'running'} onPress={function (): void { openJournalEntry(journey); }} />
-					<Button title="View parameters" disabled={journey.outcome === 'running'} onPress={function (): void { setParametersJourney(journey); }} />
-					<Button title="Copy to new profile" disabled={journey.outcome === 'running' || isRunning} onPress={function (): void { void createProfileFromJourney(journey); }} />
-					<Button title="Delete" color="#75113d" disabled={journey.id === activeJourneyID.current} onPress={function (): void { void deleteJourney(journey); }} />
 				</View>
 			</View>
 		);
@@ -1072,7 +1122,7 @@ export default function App(): React.JSX.Element {
 						<Text style={styles.activeDevice}>Device: {deviceAddress}</Text>
 						{renderStopSessionButton()}
 
-						<View style={isRunning ? styles.hidden : undefined}>
+						<View style={isRunning ? styles.hidden : styles.sectionGroup}>
 						<Section title={profileLayout.find(function (slot): slot is ProfileFolder { return(slot?.kind === 'folder' && slot.id === profileFolderID); })?.name ?? 'Profiles'}>
 							<Button title="New profile" disabled={isRunning || isLoadingProfiles || isSavingLayout} onPress={openProfileCreation} />
 							<Button title="Import profile file" disabled={isRunning || isLoadingProfiles || isSavingLayout} onPress={function (): void { void importProfileFile(); }} />
@@ -1126,6 +1176,15 @@ export default function App(): React.JSX.Element {
 										<Switch accessibilityLabel="Play session sounds" value={settings.playSessionSounds} disabled={isLoadingSettings || isSavingSettings} onValueChange={function (value): void { void changePlaySessionSounds(value); }} />
 									</View>
 									<Text style={styles.help}>Play a sound when a session starts, when it switches to a different part, and when it ends.</Text>
+									{vibrationAvailable() && (
+										<>
+											<View style={styles.settingRow}>
+												<Text style={styles.label}>Vibrate on session events</Text>
+												<Switch accessibilityLabel="Vibrate on session events" value={settings.vibrateOnSessionEvents} disabled={isLoadingSettings || isSavingSettings} onValueChange={function (value): void { void changeVibrateOnSessionEvents(value); }} />
+											</View>
+											<Text style={styles.help}>Vibrate when a session starts, switches to a different part, and ends. Works with or without sounds.</Text>
+										</>
+									)}
 									{volumeKeysAvailable() && (
 										<>
 										<View style={styles.settingRow}>
@@ -1716,6 +1775,7 @@ function createStyles(colors: AppColors) {
 	menuButton: { alignItems: 'center', gap: 5, height: 44, justifyContent: 'center', width: 44 },
 	menuLine: { width: 24, height: 3, backgroundColor: colors.onBackground, borderRadius: 2 },
 	hidden: { display: 'none' },
+	sectionGroup: { gap: 18 },
 	settingsHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
 	settingRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 16 },
 	actionHelpRow: { alignItems: 'center', flexDirection: 'row', gap: 8 },
@@ -1748,6 +1808,15 @@ function createStyles(colors: AppColors) {
 	empty: { color: colors.text, fontSize: 16, fontStyle: 'italic' },
 	profile: { alignItems: 'center', backgroundColor: colors.surface, borderRadius: 8, flexDirection: 'row', gap: 12, justifyContent: 'space-between', marginTop: 2, padding: 14 },
 	journey: { alignItems: 'center', backgroundColor: colors.surface, borderRadius: 8, flexDirection: 'row', gap: 12, justifyContent: 'space-between', marginTop: 2, padding: 14 },
+	journeyMenuOpen: { zIndex: 10 },
+	journeyText: { paddingTop: 20 },
+	journeyMenuButton: { position: 'absolute', top: 2, right: 4, paddingHorizontal: 10, paddingVertical: 4, zIndex: 11 },
+	journeyMenuGlyph: { color: colors.text, fontSize: 22, fontWeight: '700' },
+	journeyMenu: { position: 'absolute', top: 34, right: 8, backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1, borderRadius: 8, elevation: 8, zIndex: 12, shadowColor: '#000', shadowOpacity: 0.25, shadowRadius: 6, shadowOffset: { width: 0, height: 2 }, minWidth: 180 },
+	journeyMenuItem: { paddingHorizontal: 14, paddingVertical: 12 },
+	journeyMenuText: { color: colors.text, fontSize: 16 },
+	journeyMenuDelete: { color: '#c62828' },
+	journeyMenuDisabled: { opacity: 0.4 },
 	profileText: { flex: 1, gap: 3 },
 	profileName: { color: colors.text, fontSize: 17, fontWeight: '700' },
 	profileDescription: { color: colors.text },

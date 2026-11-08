@@ -6,9 +6,10 @@ export type AppSettings = {
 	showJSONCode: boolean;
 	useVolumeButtonsForFeedback: boolean;
 	playSessionSounds: boolean;
+	vibrateOnSessionEvents: boolean;
 };
 
-export const defaultSettings: AppSettings = { useSystemColors: false, useLiquidGlassButtons: false, showJSONCode: false, useVolumeButtonsForFeedback: false, playSessionSounds: false };
+export const defaultSettings: AppSettings = { useSystemColors: false, useLiquidGlassButtons: false, showJSONCode: false, useVolumeButtonsForFeedback: false, playSessionSounds: false, vibrateOnSessionEvents: false };
 const settingsStorageKey = 'brainkandi.settings.v1';
 
 export function encapsulateSettings(settings: AppSettings): string {
@@ -27,7 +28,10 @@ export function encapsulateSettings(settings: AppSettings): string {
 	if (typeof settings.playSessionSounds !== 'boolean') {
 		throw(new Error('Play session sounds must be a boolean.'));
 	}
-	return(JSON.stringify({ version: 1, useSystemColors: settings.useSystemColors, useLiquidGlassButtons: settings.useLiquidGlassButtons, showJSONCode: settings.showJSONCode, useVolumeButtonsForFeedback: settings.useVolumeButtonsForFeedback, playSessionSounds: settings.playSessionSounds }));
+	if (typeof settings.vibrateOnSessionEvents !== 'boolean') {
+		throw(new Error('Vibrate on session events must be a boolean.'));
+	}
+	return(JSON.stringify({ version: 1, useSystemColors: settings.useSystemColors, useLiquidGlassButtons: settings.useLiquidGlassButtons, showJSONCode: settings.showJSONCode, useVolumeButtonsForFeedback: settings.useVolumeButtonsForFeedback, playSessionSounds: settings.playSessionSounds, vibrateOnSessionEvents: settings.vibrateOnSessionEvents }));
 }
 
 export function decapsulateSettings(serialized: string): AppSettings {
@@ -52,12 +56,16 @@ export function decapsulateSettings(serialized: string): AppSettings {
 	if ('playSessionSounds' in value && typeof value.playSessionSounds !== 'boolean') {
 		throw(new Error('Saved session sounds setting is invalid.'));
 	}
+	if ('vibrateOnSessionEvents' in value && typeof value.vibrateOnSessionEvents !== 'boolean') {
+		throw(new Error('Saved session vibration setting is invalid.'));
+	}
 	return({
 		useSystemColors: value.useSystemColors,
 		useLiquidGlassButtons: 'useLiquidGlassButtons' in value ? value.useLiquidGlassButtons === true : false,
 		showJSONCode: 'showJSONCode' in value ? value.showJSONCode === true : false,
 		useVolumeButtonsForFeedback: 'useVolumeButtonsForFeedback' in value ? value.useVolumeButtonsForFeedback === true : false,
-		playSessionSounds: 'playSessionSounds' in value ? value.playSessionSounds === true : false
+		playSessionSounds: 'playSessionSounds' in value ? value.playSessionSounds === true : false,
+		vibrateOnSessionEvents: 'vibrateOnSessionEvents' in value ? value.vibrateOnSessionEvents === true : false
 	});
 }
 
