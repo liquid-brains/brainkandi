@@ -19,7 +19,7 @@ export function ProfileLauncher(props: {
 	buttonComponent: (props: { title: string; color?: string; disabled?: boolean; onPress: () => void }) => React.JSX.Element;
 	disabled: boolean;
 	onChange: (layout: ProfileLayout) => void;
-	renderProfile: (profile: StoredProfile) => React.JSX.Element;
+	renderProfile: (profile: StoredProfile, inFolder: boolean) => React.JSX.Element;
 	onDragging: (dragging: boolean) => void;
 	isNamingFolder: boolean;
 	onNamingFolderChange: (isNaming: boolean) => void;
@@ -157,7 +157,7 @@ export function ProfileLauncher(props: {
 		setNewFolderName('');
 	}
 
-	function renderItem(profileID: ProfileID): React.JSX.Element | null {
+	function renderItem(profileID: ProfileID, inFolder: boolean): React.JSX.Element | null {
 		const profile = props.profiles.find(function (item): boolean { return(item.id === profileID); });
 		if (profile === undefined) {
 			return(null);
@@ -172,7 +172,7 @@ export function ProfileLauncher(props: {
 					onLongPress={function (event): void { startDrag(profileID, event); }}
 					style={[styles.tile, drag?.profileID === profileID && styles.moving]}
 				>
-					{props.renderProfile(profile)}
+					{props.renderProfile(profile, inFolder)}
 				</Pressable>
 			</View>
 		);
@@ -208,13 +208,13 @@ export function ProfileLauncher(props: {
 						</View>
 						{folder.collapsed === true
 							? <Text style={styles.help}>{folder.profiles.length} profile(s) hidden</Text>
-							: folder.profiles.map(renderItem)}
+							: folder.profiles.map(function (id): React.JSX.Element | null { return(renderItem(id, true)); })}
 						{folder.collapsed !== true && folder.profiles.length === 0 && <Text style={styles.help}>Empty folder. Press and hold a profile, then drag it here.</Text>}
 					</View>
 				);
 			})}
 			<View ref={register('zone:')} collapsable={false} style={[styles.unfiled, folders.length > 0 && styles.unfiledArea, folders.length > 0 && drag !== undefined && styles.unfiledTarget]}>
-				{unfiled.map(renderItem)}
+				{unfiled.map(function (id): React.JSX.Element | null { return(renderItem(id, false)); })}
 				{folders.length > 0 && drag !== undefined && <Text style={styles.help}>Drop here to take a profile out of its folder.</Text>}
 			</View>
 			{drag !== undefined && draggedProfile !== undefined && <View pointerEvents="none" style={[styles.floating, { left: Math.max(0, drag.x - 45), top: Math.max(0, drag.y - 35) }]}>

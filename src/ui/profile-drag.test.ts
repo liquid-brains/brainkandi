@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { profileDragPosition, profileDropDestination } from './profile-drag';
+import { profileDragPosition, profileDropDestination, stepDropIndex } from './profile-drag';
 
 describe('profile drag coordinates', function () {
 	it('uses release coordinates even when no move event arrived after responder handoff', function () {
@@ -37,5 +37,21 @@ describe('profile drop destinations', function () {
 	it('returns nothing outside every target', function () {
 		expect(profileDropDestination({ x: 10, y: 10 }, 'z', items, zones)).toBeUndefined();
 		expect(profileDropDestination({ x: Number.NaN, y: 10 }, 'z', items, zones)).toBeUndefined();
+	});
+});
+
+describe('step drop index', function () {
+	const layouts = [{ y: 0, height: 50 }, { y: 58, height: 50 }, { y: 116, height: 50 }];
+	it('stays put for small drags', function () {
+		expect(stepDropIndex(layouts, 1, 5)).toBe(1);
+	});
+	it('moves to the step under the dragged center', function () {
+		expect(stepDropIndex(layouts, 0, 70)).toBe(1);
+		expect(stepDropIndex(layouts, 0, 120)).toBe(2);
+		expect(stepDropIndex(layouts, 2, -100)).toBe(0);
+	});
+	it('clamps beyond the ends', function () {
+		expect(stepDropIndex(layouts, 0, 900)).toBe(2);
+		expect(stepDropIndex(layouts, 2, -900)).toBe(0);
 	});
 });

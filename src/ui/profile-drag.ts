@@ -31,3 +31,27 @@ export function profileDropDestination(point: Point, draggedID: string, items: {
 	const zone = zones.find(function (candidate): boolean { return(contains(candidate.rect, point)); });
 	return(zone === undefined ? undefined : { kind: 'zone', folderID: zone.folderID });
 }
+
+// Index a dragged step lands on, given each step's vertical layout and how far the drag has moved.
+export function stepDropIndex(layouts: { y: number; height: number }[], from: number, dy: number): number {
+	const start = layouts[from];
+	if (start === undefined || !Number.isFinite(dy)) {
+		return(from);
+	}
+	const center = start.y + start.height / 2 + dy;
+	let target = from;
+	layouts.forEach(function (layout, index): void {
+		if (center >= layout.y && center < layout.y + layout.height) {
+			target = index;
+		}
+	});
+	const first = layouts[0];
+	const last = layouts[layouts.length - 1];
+	if (first !== undefined && center < first.y) {
+		return(0);
+	}
+	if (last !== undefined && center >= last.y + last.height) {
+		return(layouts.length - 1);
+	}
+	return(target);
+}
