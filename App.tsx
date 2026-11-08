@@ -1150,6 +1150,7 @@ export default function App(): React.JSX.Element {
 
 						<Section title="Journal">
 							{journeys.slice(0, 3).map(renderJourney)}
+							{menuJourneyID !== undefined && <View style={{ height: 130 }} />}
 							{journeys.length === 0 ? <Text style={styles.empty}>No journal records yet.</Text> : null}
 							{journeys.length > 3 ? <Button title={`View all ${journeys.length} journal records`} onPress={function (): void { setIsJournalBrowserOpen(true); }} /> : null}
 						</Section>

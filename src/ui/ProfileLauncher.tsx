@@ -184,7 +184,7 @@ export function ProfileLauncher(props: {
 		<View
 			ref={container}
 			collapsable={false}
-			style={styles.root}
+			style={[styles.root, props.raisedProfileID !== undefined && styles.rootMenuOpen]}
 			onMoveShouldSetResponderCapture={function (): boolean { return(activeDrag.current !== undefined); }}
 			onResponderGrant={moveDrag}
 			onResponderMove={moveDrag}
@@ -261,6 +261,7 @@ function makeStyles(colors: AppColors) {
 		unfiled: { gap: 10 },
 		unfiledArea: { borderColor: 'transparent', borderRadius: 10, borderStyle: 'dashed', borderWidth: 1, minHeight: 56, padding: 4 },
 		unfiledTarget: { borderColor: colors.accent },
+		rootMenuOpen: { paddingBottom: 130 },
 		raised: { zIndex: 10 },
 		moving: { opacity: 0.4 },
 		name: { color: colors.text, fontSize: 17, fontWeight: '700' },
