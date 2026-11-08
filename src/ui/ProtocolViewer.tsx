@@ -17,7 +17,7 @@ export function ProtocolViewer(props: { journey: Journey; colors: AppColors; sho
 	const modules = file === undefined ? undefined : protocolModuleViews(file.data);
 	const styles = createStyles(props.colors);
 	const isBrand = props.colors === brandColors;
-	const phaseColors = isBrand ? { A: brandColors.section, B: brandColors.background } : (props.colors.background === '#121212' ? { A: '#5f7f9e', B: '#9a6477' } : { A: '#8fa8bf', B: '#c4a0ad' });
+	const phaseColors = isBrand ? { A: brandColors.section, B: brandColors.background } : (props.colors.background === '#14171c' ? { A: '#5f7f9e', B: '#9a6477' } : { A: '#8fa8bf', B: '#c4a0ad' });
 	return(
 		<View style={styles.viewer}>
 			<Text style={styles.title}>{props.journey.profile.name}</Text>

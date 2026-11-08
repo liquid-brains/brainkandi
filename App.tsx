@@ -1053,8 +1053,8 @@ export default function App(): React.JSX.Element {
 					{journey.journalEntry === undefined ? null : <Text style={styles.journalEntry}>{journey.journalEntry}</Text>}
 				</View>
 				<View style={[styles.profileButtons, styles.journeyText]}>
-					<JourneyRatingButton thumb="👍" count={journey.rating !== undefined && journey.rating > 0 ? journey.rating : 1} color={journey.rating !== undefined && journey.rating > 0 ? '#198754' : '#666'} disabled={journey.outcome === 'running'} onPress={function (): void { void rateJourney(journey, 1); }} />
-					<JourneyRatingButton thumb="👎" count={journey.rating !== undefined && journey.rating < 0 ? Math.abs(journey.rating) : 1} color={journey.rating !== undefined && journey.rating < 0 ? '#c62828' : '#666'} disabled={journey.outcome === 'running'} onPress={function (): void { void rateJourney(journey, -1); }} />
+					<JourneyRatingButton thumb="👍" count={journey.rating !== undefined && journey.rating > 0 ? journey.rating : 1} color={journey.rating !== undefined && journey.rating > 0 ? settings.useSystemColors ? '#5f8f78' : '#198754' : '#666'} disabled={journey.outcome === 'running'} onPress={function (): void { void rateJourney(journey, 1); }} />
+					<JourneyRatingButton thumb="👎" count={journey.rating !== undefined && journey.rating < 0 ? Math.abs(journey.rating) : 1} color={journey.rating !== undefined && journey.rating < 0 ? settings.useSystemColors ? '#a06b6b' : '#c62828' : '#666'} disabled={journey.outcome === 'running'} onPress={function (): void { void rateJourney(journey, -1); }} />
 					<Button title="Journal entry" disabled={journey.outcome === 'running'} onPress={function (): void { openJournalEntry(journey); }} />
 				</View>
 			</View>
@@ -1848,7 +1848,7 @@ function createStyles(colors: AppColors) {
 	journeyMenu: { position: 'absolute', top: 34, right: 8, backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1, borderRadius: 8, elevation: 8, zIndex: 12, shadowColor: '#000', shadowOpacity: 0.25, shadowRadius: 6, shadowOffset: { width: 0, height: 2 }, minWidth: 180 },
 	journeyMenuItem: { paddingHorizontal: 14, paddingVertical: 12 },
 	journeyMenuText: { color: colors.text, fontSize: 16 },
-	journeyMenuDelete: { color: '#c62828' },
+	journeyMenuDelete: { color: colors.error },
 	journeyMenuDisabled: { opacity: 0.4 },
 	profileText: { flex: 1, gap: 3 },
 	profileName: { color: colors.text, fontSize: 17, fontWeight: '700' },
