@@ -207,8 +207,9 @@ export function ProfileLauncher(props: {
 					</View>
 				);
 			})}
-			<View ref={register('zone:')} collapsable={false} style={[styles.unfiled, folders.length > 0 && drag !== undefined && styles.unfiledTarget]}>
+			<View ref={register('zone:')} collapsable={false} style={[styles.unfiled, folders.length > 0 && styles.unfiledArea, folders.length > 0 && drag !== undefined && styles.unfiledTarget]}>
 				{unfiled.map(renderItem)}
+				{folders.length > 0 && drag !== undefined && <Text style={styles.help}>Drop here to take a profile out of its folder.</Text>}
 			</View>
 			{drag !== undefined && draggedProfile !== undefined && <View pointerEvents="none" style={[styles.floating, { left: Math.max(0, drag.x - 45), top: Math.max(0, drag.y - 35) }]}>
 				<Text numberOfLines={2} style={styles.name}>{draggedProfile.profile.name}</Text>
@@ -243,15 +244,16 @@ function makeStyles(colors: AppColors) {
 	return(StyleSheet.create({
 		root: { gap: 10, position: 'relative' },
 		tile: { width: '100%', userSelect: 'none' },
-		folder: { borderColor: colors.border, borderRadius: 10, borderWidth: 1, gap: 8, padding: 10 },
+		folder: { backgroundColor: colors.folder, borderColor: colors.folder, borderRadius: 10, borderWidth: 1, gap: 8, padding: 10 },
 		folderTarget: { borderColor: colors.accent },
 		folderHeader: { alignItems: 'center', flexDirection: 'row', gap: 8, paddingRight: 32 },
 		folderName: { flex: 1 },
 		toggle: { paddingHorizontal: 8, paddingVertical: 6 },
 		close: { position: 'absolute', right: 4, top: 4, paddingHorizontal: 8, paddingVertical: 6, zIndex: 2 },
 		glyph: { color: colors.text, fontSize: 16 },
-		unfiled: { gap: 10, minHeight: 4 },
-		unfiledTarget: { borderColor: colors.accent, borderRadius: 10, borderStyle: 'dashed', borderWidth: 1, minHeight: 48, padding: 4 },
+		unfiled: { gap: 10 },
+		unfiledArea: { borderColor: 'transparent', borderRadius: 10, borderStyle: 'dashed', borderWidth: 1, minHeight: 56, padding: 4 },
+		unfiledTarget: { borderColor: colors.accent },
 		moving: { opacity: 0.4 },
 		name: { color: colors.text, fontSize: 17, fontWeight: '700' },
 		help: { color: colors.text, fontSize: 12, marginVertical: 4 },
