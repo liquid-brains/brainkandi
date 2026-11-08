@@ -1139,6 +1139,7 @@ export default function App(): React.JSX.Element {
 								buttonComponent={Button}
 								disabled={isRunning || isLoadingProfiles || isSavingLayout}
 								onChange={function (layout): void { void saveProfileLayout(layout); }}
+								raisedProfileID={menuProfileID}
 								renderProfile={renderProfile}
 								onDragging={setIsDraggingProfile}
 								isNamingFolder={isNamingProfileFolder}
