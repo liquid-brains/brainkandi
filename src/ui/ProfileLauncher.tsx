@@ -1,16 +1,16 @@
 import { useEffect, useRef, useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Modal, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import type { GestureResponderEvent } from 'react-native';
 
-import { deleteProfileFolder, dropProfileTile, moveProfileOut } from '../core/profile-layout';
-import type { ProfileFolder, ProfileLayout, ProfileTile } from '../core/profile-layout';
+import { addProfileFolder, deleteProfileFolder, moveProfileTo, moveProfileToFolderEnd, renameProfileFolder, toggleProfileFolder } from '../core/profile-layout';
+import type { ProfileFolder, ProfileLayout } from '../core/profile-layout';
 import { createProfileID } from '../core/profiles';
 import type { ProfileID, StoredProfile } from '../core/profiles';
 import type { AppColors } from './colors';
-import { profileDragPosition, profileDropTarget } from './profile-drag';
-import type { ProfileRowBounds } from './profile-drag';
+import { profileDragPosition, profileDropDestination } from './profile-drag';
+import type { DropRect } from './profile-drag';
 
-type Drag = { from: number; x: number; y: number };
+type Drag = { profileID: ProfileID; x: number; y: number };
 
 export function ProfileLauncher(props: {
 	profiles: StoredProfile[];
@@ -21,29 +21,63 @@ export function ProfileLauncher(props: {
 	onChange: (layout: ProfileLayout) => void;
 	renderProfile: (profile: StoredProfile) => React.JSX.Element;
 	onDragging: (dragging: boolean) => void;
-	onFolderChange: (folderID: string | undefined) => void;
 }): React.JSX.Element {
-	const [folderID, setFolderID] = useState<string>();
-	const [folderName, setFolderName] = useState('');
-	const [renamingFolderID, setRenamingFolderID] = useState<string>();
 	const [drag, setDrag] = useState<Drag>();
-	const grid = useRef<View>(null);
-	const bounds = useRef({ x: 0, y: 0, width: 0, height: 0 });
-	const rows = useRef<ProfileRowBounds[]>([]);
+	const [isNamingFolder, setIsNamingFolder] = useState(false);
+	const [newFolderName, setNewFolderName] = useState('');
+	const container = useRef<View>(null);
+	const containerOrigin = useRef({ x: 0, y: 0 });
+	const targets = useRef(new Map<string, View>());
+	const itemRects = useRef<{ id: string; rect: DropRect }[]>([]);
+	const zoneRects = useRef<{ folderID: string | undefined; rect: DropRect }[]>([]);
 	const activeDrag = useRef<Drag | undefined>(undefined);
-	const folder = props.layout.find(function (slot): slot is ProfileFolder { return(slot?.kind === 'folder' && slot.id === folderID); });
-	const slots = folder === undefined ? props.layout.filter(function (slot) { return(slot !== null); }) : folder.profiles.map(function (id): ProfileTile { return({ kind: 'profile', profileID: id }); });
-	const hasHomeDropTarget = folder !== undefined;
 	const styles = makeStyles(props.colors);
 	const ButtonComponent = props.buttonComponent;
+	const folders = props.layout.filter(function (slot): slot is ProfileFolder { return(slot?.kind === 'folder'); });
+	const unfiled = props.layout.flatMap(function (slot): ProfileID[] { return(slot?.kind === 'profile' ? [slot.profileID] : []); });
 
 	useEffect(function () {
 		return(function (): void { props.onDragging(false); });
 	}, [props.onDragging]);
 
-	useEffect(function () {
-		props.onFolderChange(folder?.id);
-	}, [folder?.id, props.onFolderChange]);
+	function register(key: string): (view: View | null) => void {
+		return(function (view): void {
+			if (view === null) {
+				targets.current.delete(key);
+			} else {
+				targets.current.set(key, view);
+			}
+		});
+	}
+
+	function measure(key: string): Promise<DropRect | undefined> {
+		return(new Promise(function (resolve): void {
+			const view = targets.current.get(key);
+			if (view === undefined) {
+				resolve(undefined);
+				return;
+			}
+			view.measureInWindow(function (x, y, width, height): void { resolve({ x: x, y: y, width: width, height: height }); });
+		}));
+	}
+
+	async function measureTargets(): Promise<void> {
+		const items: { id: string; rect: DropRect }[] = [];
+		const zones: { folderID: string | undefined; rect: DropRect }[] = [];
+		for (const key of [...targets.current.keys()]) {
+			const rect = await measure(key);
+			if (rect === undefined) {
+				continue;
+			}
+			if (key.startsWith('item:')) {
+				items.push({ id: key.slice(5), rect: rect });
+			} else {
+				zones.push({ folderID: key === 'zone:' ? undefined : key.slice(5), rect: rect });
+			}
+		}
+		itemRects.current = items;
+		zoneRects.current = zones;
+	}
 
 	function cancelDrag(): void {
 		activeDrag.current = undefined;
@@ -51,22 +85,27 @@ export function ProfileLauncher(props: {
 		props.onDragging(false);
 	}
 
-	function startDrag(index: number, event: GestureResponderEvent): void {
+	function startDrag(profileID: ProfileID, event: GestureResponderEvent): void {
 		if (props.disabled) {
 			return;
 		}
-		const pending = { from: index, x: -1, y: -1 };
+		const pending: Drag = { profileID: profileID, x: -1, y: -1 };
 		activeDrag.current = pending;
 		props.onDragging(true);
 		const { pageX, pageY } = event.nativeEvent;
-		grid.current?.measureInWindow(function (x, y, width, height): void {
+		container.current?.measureInWindow(function (x, y): void {
 			if (activeDrag.current !== pending) {
 				return;
 			}
-			bounds.current = { x: x, y: y, width: width, height: height };
-			const started = { from: index, x: pageX - x, y: pageY - y };
-			activeDrag.current = started;
-			setDrag(started);
+			containerOrigin.current = { x: x, y: y };
+			void measureTargets().then(function (): void {
+				if (activeDrag.current !== pending) {
+					return;
+				}
+				const started = { profileID: profileID, x: pageX - x, y: pageY - y };
+				activeDrag.current = started;
+				setDrag(started);
+			});
 		});
 	}
 
@@ -75,161 +114,150 @@ export function ProfileLauncher(props: {
 			return;
 		}
 		const moved = {
-			from: activeDrag.current.from,
-			x: event.nativeEvent.pageX - bounds.current.x,
-			y: event.nativeEvent.pageY - bounds.current.y
+			profileID: activeDrag.current.profileID,
+			x: event.nativeEvent.pageX - containerOrigin.current.x,
+			y: event.nativeEvent.pageY - containerOrigin.current.y
 		};
 		activeDrag.current = moved;
 		setDrag(moved);
 	}
 
-	function changeSlots(updated: ProfileLayout): void {
-		if (folder === undefined) {
-			props.onChange(updated);
-		} else {
-			const profiles = updated.flatMap(function (slot): ProfileID[] { return(slot?.kind === 'profile' ? [slot.profileID] : []); });
-			props.onChange(props.layout.map(function (slot) { return(slot === folder ? { ...folder, profiles: profiles } : slot); }));
-		}
-	}
-
-	function place(from: number, to: number): void {
-		changeSlots(dropProfileTile(slots, from, to));
-	}
-
 	function finishDrag(event: Parameters<typeof profileDragPosition>[0]): void {
-		const current = activeDrag.current === undefined ? undefined : {
-			from: activeDrag.current.from,
-			...profileDragPosition(event, bounds.current, activeDrag.current)
-		};
+		const current = activeDrag.current;
 		cancelDrag();
 		if (current === undefined || props.disabled) {
 			return;
 		}
-		const target = profileDropTarget(current, bounds.current, rows.current.slice(0, slots.length + (hasHomeDropTarget ? 1 : 0)));
-		if (target !== undefined) {
-			if (hasHomeDropTarget && target.index === 0) {
-				const source = slots[current.from];
-				if (source?.kind === 'profile') {
-					props.onChange(moveProfileOut(props.layout, folder!.id, source.profileID));
-				}
-			} else {
-				place(current.from, target.index - (hasHomeDropTarget ? 1 : 0));
-			}
+		const relative = profileDragPosition(event, { x: 0, y: 0 }, { x: current.x + containerOrigin.current.x, y: current.y + containerOrigin.current.y });
+		const destination = profileDropDestination(relative, current.profileID, itemRects.current, zoneRects.current);
+		if (destination === undefined) {
+			return;
+		}
+		if (destination.kind === 'item') {
+			props.onChange(moveProfileTo(props.layout, current.profileID, destination.id as ProfileID, destination.after));
+		} else {
+			props.onChange(moveProfileToFolderEnd(props.layout, current.profileID, destination.folderID));
 		}
 	}
 
-	function label(slot: ProfileTile | ProfileFolder): string {
-		if (slot.kind === 'folder') {
-			return(slot.name);
+	function createFolder(): void {
+		const name = newFolderName.trim();
+		if (name === '') {
+			return;
 		}
-		return(props.profiles.find(function (profile): boolean { return(profile.id === slot.profileID); })?.profile.name ?? 'Profile');
+		props.onChange(addProfileFolder(props.layout, createProfileID(), name));
+		setIsNamingFolder(false);
+		setNewFolderName('');
 	}
 
-	const draggedSlot = drag === undefined ? undefined : slots[drag.from];
-	return(
-		<View>
-			{folder === undefined && <View style={styles.newFolder}>
-				<ButtonComponent title="New folder" disabled={props.disabled} onPress={function (): void {
-					props.onChange([...props.layout, { kind: 'folder', id: createProfileID(), name: 'New folder', profiles: [] }]);
-				}} />
-			</View>}
-			{folder !== undefined && <View style={styles.controls}>
-				<ButtonComponent title="Back" onPress={function (): void { cancelDrag(); setFolderID(undefined); props.onFolderChange(undefined); }} />
-			</View>}
-			<View
-				ref={grid}
-				style={styles.grid}
-				onMoveShouldSetResponderCapture={function (): boolean { return(activeDrag.current !== undefined); }}
-				onResponderGrant={moveDrag}
-				onResponderMove={moveDrag}
-				onResponderRelease={finishDrag}
-				onResponderTerminate={cancelDrag}
-				onResponderTerminationRequest={function (): boolean { return(false); }}
-				onTouchEnd={finishDrag}
-				onTouchCancel={cancelDrag}
-				onPointerUp={finishDrag}
-			>
-				{hasHomeDropTarget && <View style={styles.dropZone} onLayout={function (event): void {
-					const { y, height } = event.nativeEvent.layout;
-					rows.current[0] = { y: y, height: height };
-				}}>
-					<Text style={styles.help}>Drop here to move to profiles</Text>
-				</View>}
-				{slots.map(function (slot, index): React.JSX.Element {
-					const profile = slot.kind === 'profile' ? props.profiles.find(function (item): boolean { return(item.id === slot.profileID); }) : undefined;
-					return(
-						<View key={index} style={[styles.cell, slot.kind === 'folder' && styles.folderItem]} onLayout={function (event): void {
-							const { y, height } = event.nativeEvent.layout;
-							rows.current[index + (hasHomeDropTarget ? 1 : 0)] = { y: y, height: height };
-						}}>
-							<Pressable
-								accessibilityRole={slot.kind === 'folder' ? 'button' : undefined}
-								accessibilityLabel={`${slot.kind === 'folder' ? 'Folder: ' : ''}${label(slot)}`}
-								accessibilityHint="Hold to drag."
-								accessible={slot.kind === 'folder'}
-								disabled={props.disabled}
-								delayLongPress={400}
-								onLongPress={function (event): void { startDrag(index, event); }}
-								onPress={function (): void {
-									if (activeDrag.current !== undefined) { return; }
-									if (slot.kind === 'folder') {
-										setRenamingFolderID(undefined);
-										setFolderID(slot.id);
-										props.onFolderChange(slot.id);
-									}
-								}}
-								style={[styles.tile, slot.kind === 'folder' && styles.folderTile, drag?.from === index && styles.moving]}
-							>
-								{slot.kind === 'folder' ? <View style={styles.folder}>
-									<Text style={styles.name}>{slot.name}</Text>
-									<Text style={styles.help}>{slot.profiles.length} profiles</Text>
-								</View> : profile !== undefined && props.renderProfile(profile)}
-							</Pressable>
-							{folder === undefined && slot.kind === 'folder' && <View style={styles.folderActions}>
-								{renamingFolderID === slot.id ? <>
-									<TextInput accessibilityLabel="Folder name" value={folderName} onChangeText={setFolderName} editable={!props.disabled} style={styles.input} />
-									<ButtonComponent title="Save folder name" disabled={props.disabled || folderName.trim() === ''} onPress={function (): void {
-										props.onChange(props.layout.map(function (item) { return(item === slot ? { ...slot, name: folderName.trim() } : item); }));
-										setRenamingFolderID(undefined);
-									}} />
-									<ButtonComponent title="Cancel rename" onPress={function (): void { setRenamingFolderID(undefined); }} />
-								</> : <ButtonComponent title="Rename" disabled={props.disabled} onPress={function (): void {
-									setFolderName(slot.name);
-									setRenamingFolderID(slot.id);
-								}} />}
-								<ButtonComponent title="Delete" color="#75113d" disabled={props.disabled} onPress={function (): void {
-									props.onChange(deleteProfileFolder(props.layout, slot.id));
-									setRenamingFolderID(undefined);
-								}} />
-							</View>}
-						</View>
-					);
-				})}
-				{drag !== undefined && draggedSlot !== undefined && draggedSlot !== null && <View pointerEvents="none" style={[styles.floating, {
-					left: Math.max(0, Math.min(bounds.current.width - 90, drag.x - 45)),
-					top: Math.max(0, Math.min(bounds.current.height - 70, drag.y - 35))
-				}]}><Text numberOfLines={2} style={styles.name}>{label(draggedSlot)}</Text></View>}
+	function renderItem(profileID: ProfileID): React.JSX.Element | null {
+		const profile = props.profiles.find(function (item): boolean { return(item.id === profileID); });
+		if (profile === undefined) {
+			return(null);
+		}
+		return(
+			<View key={profileID} ref={register(`item:${profileID}`)} collapsable={false}>
+				<Pressable
+					accessibilityHint="Hold to drag."
+					accessible={false}
+					disabled={props.disabled}
+					delayLongPress={400}
+					onLongPress={function (event): void { startDrag(profileID, event); }}
+					style={[styles.tile, drag?.profileID === profileID && styles.moving]}
+				>
+					{props.renderProfile(profile)}
+				</Pressable>
 			</View>
+		);
+	}
+
+	const draggedProfile = drag === undefined ? undefined : props.profiles.find(function (item): boolean { return(item.id === drag.profileID); });
+	return(
+		<View
+			ref={container}
+			collapsable={false}
+			style={styles.root}
+			onMoveShouldSetResponderCapture={function (): boolean { return(activeDrag.current !== undefined); }}
+			onResponderGrant={moveDrag}
+			onResponderMove={moveDrag}
+			onResponderRelease={finishDrag}
+			onResponderTerminate={cancelDrag}
+			onResponderTerminationRequest={function (): boolean { return(false); }}
+			onTouchEnd={finishDrag}
+			onTouchCancel={cancelDrag}
+			onPointerUp={finishDrag}
+		>
+			<ButtonComponent title="New folder" disabled={props.disabled} onPress={function (): void { setNewFolderName(''); setIsNamingFolder(true); }} />
+			{folders.map(function (folder): React.JSX.Element {
+				return(
+					<View key={folder.id} ref={register(`zone:${folder.id}`)} collapsable={false} style={[styles.folder, drag !== undefined && styles.folderTarget]}>
+						<Pressable accessibilityRole="button" accessibilityLabel={`Delete folder ${folder.name}`} disabled={props.disabled} onPress={function (): void { props.onChange(deleteProfileFolder(props.layout, folder.id)); }} style={styles.close}>
+							<Text style={styles.glyph}>✕</Text>
+						</Pressable>
+						<View style={styles.folderHeader}>
+							<Pressable accessibilityRole="button" accessibilityLabel={`${folder.collapsed === true ? 'Expand' : 'Collapse'} folder ${folder.name}`} accessibilityState={{ expanded: folder.collapsed !== true }} onPress={function (): void { props.onChange(toggleProfileFolder(props.layout, folder.id)); }} style={styles.toggle}>
+								<Text style={styles.glyph}>{folder.collapsed === true ? '▶' : '▼'}</Text>
+							</Pressable>
+							<FolderNameInput key={folder.name} name={folder.name} styles={styles} disabled={props.disabled} onCommit={function (name): void { props.onChange(renameProfileFolder(props.layout, folder.id, name)); }} />
+						</View>
+						{folder.collapsed === true
+							? <Text style={styles.help}>{folder.profiles.length} profile(s) hidden</Text>
+							: folder.profiles.map(renderItem)}
+						{folder.collapsed !== true && folder.profiles.length === 0 && <Text style={styles.help}>Empty folder. Press and hold a profile, then drag it here.</Text>}
+					</View>
+				);
+			})}
+			<View ref={register('zone:')} collapsable={false} style={[styles.unfiled, folders.length > 0 && drag !== undefined && styles.unfiledTarget]}>
+				{unfiled.map(renderItem)}
+			</View>
+			{drag !== undefined && draggedProfile !== undefined && <View pointerEvents="none" style={[styles.floating, { left: Math.max(0, drag.x - 45), top: Math.max(0, drag.y - 35) }]}>
+				<Text numberOfLines={2} style={styles.name}>{draggedProfile.profile.name}</Text>
+			</View>}
+			<Modal transparent animationType="fade" visible={isNamingFolder} onRequestClose={function (): void { setIsNamingFolder(false); }}>
+				<View style={styles.backdrop}>
+					<View style={styles.dialog}>
+						<Text style={styles.name}>New folder</Text>
+						<TextInput accessibilityLabel="Folder name" autoFocus placeholder="Folder name" placeholderTextColor={props.colors.text} value={newFolderName} onChangeText={setNewFolderName} onSubmitEditing={createFolder} style={styles.input} />
+						<ButtonComponent title="Create folder" disabled={newFolderName.trim() === ''} onPress={createFolder} />
+						<ButtonComponent title="Cancel" onPress={function (): void { setIsNamingFolder(false); }} />
+					</View>
+				</View>
+			</Modal>
 		</View>
 	);
 }
 
+function FolderNameInput(props: { name: string; disabled: boolean; styles: ReturnType<typeof makeStyles>; onCommit: (name: string) => void }): React.JSX.Element {
+	const [draft, setDraft] = useState(props.name);
+	function commit(): void {
+		if (draft.trim() === '') {
+			setDraft(props.name);
+		} else if (draft.trim() !== props.name) {
+			props.onCommit(draft);
+		}
+	}
+	return(<TextInput accessibilityLabel="Folder name" value={draft} editable={!props.disabled} onChangeText={setDraft} onBlur={commit} onSubmitEditing={commit} style={[props.styles.input, props.styles.folderName]} />);
+}
+
 function makeStyles(colors: AppColors) {
 	return(StyleSheet.create({
-		grid: { gap: 10, position: 'relative' },
-		newFolder: { marginBottom: 10 },
-		cell: { width: '100%' },
+		root: { gap: 10, position: 'relative' },
 		tile: { width: '100%', userSelect: 'none' },
-		folderItem: { alignItems: 'center', backgroundColor: colors.surface, borderRadius: 8, flexDirection: 'row', gap: 12, justifyContent: 'space-between', marginTop: 2, padding: 14 },
-		folderTile: { flex: 1, width: 'auto' },
-		folder: { flex: 1 },
-		folderActions: { gap: 6 },
-		moving: { opacity: 0.4, borderColor: colors.accent },
+		folder: { borderColor: colors.border, borderRadius: 10, borderWidth: 1, gap: 8, padding: 10 },
+		folderTarget: { borderColor: colors.accent },
+		folderHeader: { alignItems: 'center', flexDirection: 'row', gap: 8, paddingRight: 32 },
+		folderName: { flex: 1 },
+		toggle: { paddingHorizontal: 8, paddingVertical: 6 },
+		close: { position: 'absolute', right: 4, top: 4, paddingHorizontal: 8, paddingVertical: 6, zIndex: 2 },
+		glyph: { color: colors.text, fontSize: 16 },
+		unfiled: { gap: 10, minHeight: 4 },
+		unfiledTarget: { borderColor: colors.accent, borderRadius: 10, borderStyle: 'dashed', borderWidth: 1, minHeight: 48, padding: 4 },
+		moving: { opacity: 0.4 },
 		name: { color: colors.text, fontSize: 17, fontWeight: '700' },
 		help: { color: colors.text, fontSize: 12, marginVertical: 4 },
-		controls: { gap: 6, marginBottom: 8 },
-		dropZone: { minHeight: 40, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: colors.border, borderRadius: 6 },
 		input: { color: colors.inputText, backgroundColor: colors.surface, padding: 8, borderWidth: 1, borderColor: colors.border, borderRadius: 6 },
-		floating: { position: 'absolute', width: 90, height: 70, padding: 8, backgroundColor: colors.surface, borderWidth: 3, borderColor: colors.accent, borderRadius: 12, alignItems: 'center', justifyContent: 'center' }
+		floating: { position: 'absolute', width: 90, height: 70, padding: 8, backgroundColor: colors.surface, borderWidth: 3, borderColor: colors.accent, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+		backdrop: { alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.45)', flex: 1, justifyContent: 'center', padding: 20 },
+		dialog: { backgroundColor: colors.surface, borderRadius: 12, gap: 10, padding: 16, width: '100%', maxWidth: 420 }
 	}));
 }

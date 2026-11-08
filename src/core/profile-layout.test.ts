@@ -9,7 +9,7 @@ vi.mock('@react-native-async-storage/async-storage', function () {
 	} });
 });
 
-import { addProfileToFolder, AsyncStorageProfileLayoutStore, decodeProfileLayout, deleteProfileFolder, dropProfileTile, moveProfileOut, reconcileProfileLayout } from './profile-layout';
+import { addProfileFolder, addProfileToFolder, AsyncStorageProfileLayoutStore, decodeProfileLayout, deleteProfileFolder, moveProfileTo, moveProfileToFolderEnd, reconcileProfileLayout, renameProfileFolder, toggleProfileFolder } from './profile-layout';
 import type { ProfileLayout, ProfileTile } from './profile-layout';
 import type { ProfileID } from './profiles';
 
@@ -33,44 +33,52 @@ describe('profile launcher layout', function () {
 		expect(reconcileProfileLayout([tile(b), null, tile(a)], [a, b, c])).toEqual([tile(b), tile(a), tile(c)]);
 	});
 
-	it('inserts profiles in list order without swapping intermediate items or creating gaps', function () {
-		const moved = dropProfileTile([tile(a), tile(b), tile(c)], 0, 2);
-		expect(moved).toEqual([tile(b), tile(c), tile(a)]);
-		expect(dropProfileTile(moved, 2, 0)).toEqual([tile(a), tile(b), tile(c)]);
-		expect(dropProfileTile(moved, 0, 3)).toBe(moved);
-	});
-
-	it('moves profiles into folders when dropped on them without grouping profiles', function () {
-		const folder = { kind: 'folder' as const, id: 'folder', name: 'Favorites', profiles: [a] };
-		expect(dropProfileTile([tile(b), folder], 0, 1)).toEqual([{ kind: 'folder', id: 'folder', name: 'Favorites', profiles: [a, b] }]);
-		expect(dropProfileTile([tile(b), { ...folder, profiles: [] }], 0, 1)).toEqual([{ ...folder, profiles: [b] }]);
-		expect(dropProfileTile([tile(a), tile(b)], 0, 1)).toEqual([tile(b), tile(a)]);
-	});
-
-	it('moves folders as a unit instead of nesting them', function () {
+	it('moves profiles before or after another profile, joining its folder', function () {
 		const folder = { kind: 'folder' as const, id: 'folder', name: 'Favorites', profiles: [a, b] };
-		expect(dropProfileTile([folder, tile(c)], 0, 1)).toEqual([tile(c), folder]);
+		expect(moveProfileTo([folder, tile(c)], c, a, false)).toEqual([{ ...folder, profiles: [c, a, b] }]);
+		expect(moveProfileTo([folder, tile(c)], c, b, true)).toEqual([{ ...folder, profiles: [a, b, c] }]);
+		expect(moveProfileTo([folder, tile(c)], a, c, true)).toEqual([{ ...folder, profiles: [b] }, tile(c), tile(a)]);
+		expect(moveProfileTo([tile(a), tile(b), tile(c)], a, c, true)).toEqual([tile(b), tile(c), tile(a)]);
 	});
 
-	it('ignores invalid, empty, and same-position drops', function () {
-		const layout = [tile(a), null];
-		for (const [from, to] of [[0, 0], [1, 0], [-1, 0], [0, -1], [0, 99], [0, 0.5]]) {
-			expect(dropProfileTile(layout, from!, to!)).toBe(layout);
-		}
+	it('ignores moves onto itself or unknown profiles', function () {
+		const layout = [tile(a), tile(b)];
+		expect(moveProfileTo(layout, a, a, true)).toBe(layout);
+		expect(moveProfileTo(layout, a, d, true)).toBe(layout);
+		expect(moveProfileTo(layout, d, a, true)).toBe(layout);
+	});
+
+	it('moves profiles to the end of a folder or out to the unfiled list', function () {
+		const folder = { kind: 'folder' as const, id: 'folder', name: 'Favorites', profiles: [a, b] };
+		expect(moveProfileToFolderEnd([folder, tile(c)], c, 'folder')).toEqual([{ ...folder, profiles: [a, b, c] }]);
+		expect(moveProfileToFolderEnd([folder, tile(c)], a, 'folder')).toEqual([{ ...folder, profiles: [b, a] }, tile(c)]);
+		expect(moveProfileToFolderEnd([folder, tile(c)], a, undefined)).toEqual([{ ...folder, profiles: [b] }, tile(c), tile(a)]);
+		const layout = [folder, tile(c)];
+		expect(moveProfileToFolderEnd(layout, c, 'missing')).toBe(layout);
+	});
+
+	it('adds, renames and collapses folders', function () {
+		const layout = addProfileFolder([tile(a)], 'f', '  Fav ');
+		expect(layout).toEqual([tile(a), { kind: 'folder', id: 'f', name: 'Fav', profiles: [] }]);
+		expect(addProfileFolder(layout, 'g', ' ')).toBe(layout);
+		expect(renameProfileFolder(layout, 'f', 'Best')[1]).toMatchObject({ name: 'Best' });
+		expect(renameProfileFolder(layout, 'f', ' ')).toBe(layout);
+		const collapsed = toggleProfileFolder(layout, 'f');
+		expect(collapsed[1]).toMatchObject({ collapsed: true });
+		expect(toggleProfileFolder(collapsed, 'f')).toEqual(layout);
+	});
+
+	it('persists collapsed folders', async function () {
+		const store = new AsyncStorageProfileLayoutStore();
+		const layout: ProfileLayout = [{ kind: 'folder', id: 'f', name: 'Fav', profiles: [a], collapsed: true }];
+		await store.save(layout);
+		expect(await store.load()).toEqual(layout);
 	});
 
 	it('removes deleted profiles while preserving folders that are empty', function () {
 		const layout: ProfileLayout = [tile(a), { kind: 'folder', id: 'folder', name: 'Favorites', profiles: [b, c] }];
 		expect(reconcileProfileLayout(layout, [b])).toEqual([{ kind: 'folder', id: 'folder', name: 'Favorites', profiles: [b] }]);
 		expect(reconcileProfileLayout(layout, [a])).toEqual([tile(a), { kind: 'folder', id: 'folder', name: 'Favorites', profiles: [] }]);
-	});
-
-	it('appends a profile moved out of a folder and preserves the folder when it becomes empty', function () {
-		const layout: ProfileLayout = [null, { kind: 'folder', id: 'folder', name: 'Favorites', profiles: [a, b] }];
-		const moved = moveProfileOut(layout, 'folder', a);
-		expect(moved).toEqual([{ kind: 'folder', id: 'folder', name: 'Favorites', profiles: [b] }, tile(a)]);
-		expect(moveProfileOut(moved, 'folder', b)).toEqual([{ kind: 'folder', id: 'folder', name: 'Favorites', profiles: [] }, tile(a), tile(b)]);
-		expect(moveProfileOut(layout, 'missing', a)).toBe(layout);
 	});
 
 	it('adds newly created profiles to the folder that was open during creation', function () {

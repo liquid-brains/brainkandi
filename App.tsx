@@ -367,7 +367,6 @@ export default function App(): React.JSX.Element {
 	const [isLoadingProfiles, setIsLoadingProfiles] = useState(true);
 	const [isSavingLayout, setIsSavingLayout] = useState(false);
 	const [isDraggingProfile, setIsDraggingProfile] = useState(false);
-	const [profileFolderID, setProfileFolderID] = useState<string>();
 	const [journeys, setJourneys] = useState<Journey[]>([]);
 	const [isJournalBrowserOpen, setIsJournalBrowserOpen] = useState(false);
 	const [journalSort, setJournalSort] = useState<JournalSort>('newest');
@@ -857,8 +856,8 @@ export default function App(): React.JSX.Element {
 		}
 		try {
 			const profile = profileFromEditorValues(profileEditor);
-			const saved = await profileStore.save(profile);
-			await loadProfiles(profileFolderID === undefined ? undefined : { folderID: profileFolderID, profileID: saved.id });
+			await profileStore.save(profile);
+			await loadProfiles();
 			closeProfileDocumentModal();
 			setStatus(`Saved ${profile.name}.`);
 		} catch (error) {
@@ -1123,7 +1122,7 @@ export default function App(): React.JSX.Element {
 						{renderStopSessionButton()}
 
 						<View style={isRunning ? styles.hidden : styles.sectionGroup}>
-						<Section title={profileLayout.find(function (slot): slot is ProfileFolder { return(slot?.kind === 'folder' && slot.id === profileFolderID); })?.name ?? 'Profiles'}>
+						<Section title="Profiles">
 							<Button title="New profile" disabled={isRunning || isLoadingProfiles || isSavingLayout} onPress={openProfileCreation} />
 							<Button title="Import profile file" disabled={isRunning || isLoadingProfiles || isSavingLayout} onPress={function (): void { void importProfileFile(); }} />
 							<ProfileLauncher
@@ -1135,7 +1134,6 @@ export default function App(): React.JSX.Element {
 								onChange={function (layout): void { void saveProfileLayout(layout); }}
 								renderProfile={renderProfile}
 								onDragging={setIsDraggingProfile}
-								onFolderChange={setProfileFolderID}
 							/>
 							{renderEmptyProfiles()}
 						</Section>
