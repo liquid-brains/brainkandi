@@ -9,7 +9,7 @@ export const brandColors = {
 	sectionBorder: 'transparent',
 	border: '#bd2b72',
 	helpSurface: '#fff0f8',
-	folder: '#bfe3ff',
+	folder: '#2196f3',
 	error: '#b00020',
 	errorSurface: '#fff0f0',
 	accent: '#2196f3',
