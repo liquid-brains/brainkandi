@@ -36,10 +36,10 @@ describe('app colors', function () {
 		expect(getAppColors(true, null)).toEqual(getAppColors(true, 'light'));
 	});
 
-	it('preserves the original system light accent and button colors', function () {
+	it('uses a muted slate accent and button color in the system light palette', function () {
 		const light = getAppColors(true, 'light');
-		expect(light.accent).toBe('#007aff');
-		expect(light.button).toBe('#007aff');
+		expect(light.accent).toBe('#3d5a80');
+		expect(light.button).toBe('#3d5a80');
 	});
 
 	it('separates system light item surfaces from sections', function () {

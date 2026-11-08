@@ -3,10 +3,13 @@ import {
 	ActionSheetIOS,
 	Button as NativeButton,
 	type ButtonProps,
+	type LayoutChangeEvent,
+	type StyleProp,
 	type ViewStyle,
 	Image,
 	KeyboardAvoidingView,
 	Modal,
+	PanResponder,
 	Platform,
 	Pressable,
 	ScrollView,
@@ -44,6 +47,7 @@ import { runWithSessionBackground } from './src/core/session-background';
 import { brandColors, getAppColors } from './src/ui/colors';
 import type { AppColors } from './src/ui/colors';
 import { ProfileLauncher } from './src/ui/ProfileLauncher';
+import { stepDropIndex } from './src/ui/profile-drag';
 import { ProtocolViewer } from './src/ui/ProtocolViewer';
 import type { SavedDevice } from './src/core/device-store';
 import type { Journey, JourneyFile, JourneyRating } from './src/core/journey-store';
@@ -366,8 +370,8 @@ export default function App(): React.JSX.Element {
 	const [profileLayout, setProfileLayout] = useState<ProfileLayout>([]);
 	const [isLoadingProfiles, setIsLoadingProfiles] = useState(true);
 	const [isSavingLayout, setIsSavingLayout] = useState(false);
+	const [isNamingProfileFolder, setIsNamingProfileFolder] = useState(false);
 	const [isDraggingProfile, setIsDraggingProfile] = useState(false);
-	const [profileFolderID, setProfileFolderID] = useState<string>();
 	const [journeys, setJourneys] = useState<Journey[]>([]);
 	const [isJournalBrowserOpen, setIsJournalBrowserOpen] = useState(false);
 	const [journalSort, setJournalSort] = useState<JournalSort>('newest');
@@ -857,8 +861,8 @@ export default function App(): React.JSX.Element {
 		}
 		try {
 			const profile = profileFromEditorValues(profileEditor);
-			const saved = await profileStore.save(profile);
-			await loadProfiles(profileFolderID === undefined ? undefined : { folderID: profileFolderID, profileID: saved.id });
+			await profileStore.save(profile);
+			await loadProfiles();
 			closeProfileDocumentModal();
 			setStatus(`Saved ${profile.name}.`);
 		} catch (error) {
@@ -1017,7 +1021,7 @@ export default function App(): React.JSX.Element {
 					{sequenceError !== undefined && <Text style={styles.fieldError}>Cannot run: {sequenceError}</Text>}
 					{item.profile.kind === 'sequence' && <SequenceSteps steps={item.profile.steps} profiles={profiles} />}
 				</View>
-				<View style={[styles.profileButtons, styles.journeyText]}>
+				<View style={[styles.profileButtons, styles.profileButtonsWithMenu]}>
 					<Button title="Run" disabled={isRunning || item.profile.kind === 'ai' || validationErrors.length > 0 || sequenceError !== undefined} onPress={function (): void { runSavedProfile(item); }} />
 					<Button title="View / edit" disabled={isRunning} onPress={function (): void { openProfileEditor(item); }} />
 				</View>
@@ -1053,8 +1057,8 @@ export default function App(): React.JSX.Element {
 					{journey.journalEntry === undefined ? null : <Text style={styles.journalEntry}>{journey.journalEntry}</Text>}
 				</View>
 				<View style={[styles.profileButtons, styles.journeyText]}>
-					<JourneyRatingButton thumb="👍" count={journey.rating !== undefined && journey.rating > 0 ? journey.rating : 1} color={journey.rating !== undefined && journey.rating > 0 ? '#198754' : '#666'} disabled={journey.outcome === 'running'} onPress={function (): void { void rateJourney(journey, 1); }} />
-					<JourneyRatingButton thumb="👎" count={journey.rating !== undefined && journey.rating < 0 ? Math.abs(journey.rating) : 1} color={journey.rating !== undefined && journey.rating < 0 ? '#c62828' : '#666'} disabled={journey.outcome === 'running'} onPress={function (): void { void rateJourney(journey, -1); }} />
+					<JourneyRatingButton thumb="👍" count={journey.rating !== undefined && journey.rating > 0 ? journey.rating : 1} color={journey.rating !== undefined && journey.rating > 0 ? settings.useSystemColors ? '#5f8f78' : '#198754' : '#666'} disabled={journey.outcome === 'running'} onPress={function (): void { void rateJourney(journey, 1); }} />
+					<JourneyRatingButton thumb="👎" count={journey.rating !== undefined && journey.rating < 0 ? Math.abs(journey.rating) : 1} color={journey.rating !== undefined && journey.rating < 0 ? settings.useSystemColors ? '#a06b6b' : '#c62828' : '#666'} disabled={journey.outcome === 'running'} onPress={function (): void { void rateJourney(journey, -1); }} />
 					<Button title="Journal entry" disabled={journey.outcome === 'running'} onPress={function (): void { openJournalEntry(journey); }} />
 				</View>
 			</View>
@@ -1123,9 +1127,11 @@ export default function App(): React.JSX.Element {
 						{renderStopSessionButton()}
 
 						<View style={isRunning ? styles.hidden : styles.sectionGroup}>
-						<Section title={profileLayout.find(function (slot): slot is ProfileFolder { return(slot?.kind === 'folder' && slot.id === profileFolderID); })?.name ?? 'Profiles'}>
-							<Button title="New profile" disabled={isRunning || isLoadingProfiles || isSavingLayout} onPress={openProfileCreation} />
-							<Button title="Import profile file" disabled={isRunning || isLoadingProfiles || isSavingLayout} onPress={function (): void { void importProfileFile(); }} />
+						<Section title="Profiles" menuItems={[
+							{ label: 'New profile', disabled: isRunning || isLoadingProfiles || isSavingLayout, onPress: openProfileCreation },
+							{ label: 'Import profile file', disabled: isRunning || isLoadingProfiles || isSavingLayout, onPress: function (): void { void importProfileFile(); } },
+							{ label: 'New folder', disabled: isRunning || isLoadingProfiles || isSavingLayout, onPress: function (): void { setIsNamingProfileFolder(true); } }
+						]}>
 							<ProfileLauncher
 								profiles={profiles}
 								layout={profileLayout}
@@ -1135,7 +1141,8 @@ export default function App(): React.JSX.Element {
 								onChange={function (layout): void { void saveProfileLayout(layout); }}
 								renderProfile={renderProfile}
 								onDragging={setIsDraggingProfile}
-								onFolderChange={setProfileFolderID}
+								isNamingFolder={isNamingProfileFolder}
+								onNamingFolderChange={setIsNamingProfileFolder}
 							/>
 							{renderEmptyProfiles()}
 						</Section>
@@ -1325,12 +1332,37 @@ function Button({ title, color: requestedColor, disabled = false, onPress, ...pr
 	);
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }): React.JSX.Element {
+type SectionMenuItem = { label: string; disabled?: boolean; onPress: () => void };
+
+function Section({ title, children, menuItems }: { title: string; children: React.ReactNode; menuItems?: SectionMenuItem[] }): React.JSX.Element {
 	const { styles, useLiquidGlassButtons } = useContext(ThemeContext);
+	const [isMenuOpen, setIsMenuOpen] = useState(false);
+	const header = (
+		<>
+			<Text style={[styles.sectionTitle, menuItems !== undefined && styles.sectionTitleWithMenu]}>{title}</Text>
+			{menuItems !== undefined && (
+				<Pressable accessibilityRole="button" accessibilityLabel={`${title} actions`} onPress={function (): void { setIsMenuOpen(!isMenuOpen); }} style={styles.sectionMenuButton}>
+					<Text style={styles.journeyMenuGlyph}>⋮</Text>
+				</Pressable>
+			)}
+			{menuItems !== undefined && isMenuOpen && (
+				<View style={styles.sectionMenu}>
+					{menuItems.map(function (item): React.JSX.Element {
+						return(
+							<Pressable key={item.label} accessibilityRole="menuitem" disabled={item.disabled === true} onPress={function (): void { setIsMenuOpen(false); item.onPress(); }} style={styles.journeyMenuItem}>
+								<Text style={[styles.journeyMenuText, item.disabled === true ? styles.journeyMenuDisabled : undefined]}>{item.label}</Text>
+							</Pressable>
+						);
+					})}
+				</View>
+			)}
+		</>
+	);
+	const sectionStyle = isMenuOpen ? styles.sectionMenuOpen : undefined;
 	if (!useLiquidGlassButtons) {
 		return(
-			<View key="standard-section" style={styles.section}>
-				<Text style={styles.sectionTitle}>{title}</Text>
+			<View key="standard-section" style={[styles.section, sectionStyle]}>
+				{header}
 				{children}
 			</View>
 		);
@@ -1338,9 +1370,9 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 	return(
 		<View key="liquid-glass-section" style={styles.sectionLift}>
 			<View pointerEvents="none" style={styles.sectionDropShadow} />
-			<View style={[styles.section, styles.sectionGlass, webLiquidGlassStyle]}>
+			<View style={[styles.section, styles.sectionGlass, webLiquidGlassStyle, sectionStyle]}>
 				<View pointerEvents="none" style={styles.sectionGlassHighlight} />
-				<Text style={styles.sectionTitle}>{title}</Text>
+				{header}
 				{children}
 			</View>
 		</View>
@@ -1417,6 +1449,26 @@ function renderFieldHelp(label: string, helpText: string | undefined, isShowingH
 	);
 }
 
+function StepDragHandle(props: { onStart: () => void; onMove: (dy: number) => void; onEnd: (dy: number) => void; onCancel: () => void }): React.JSX.Element {
+	const { styles } = useContext(ThemeContext);
+	const latest = useRef(props);
+	latest.current = props;
+	const responder = useRef(PanResponder.create({
+		onStartShouldSetPanResponder: function (): boolean { return(true); },
+		onMoveShouldSetPanResponder: function (): boolean { return(true); },
+		onPanResponderTerminationRequest: function (): boolean { return(false); },
+		onPanResponderGrant: function (): void { latest.current.onStart(); },
+		onPanResponderMove: function (_event, gesture): void { latest.current.onMove(gesture.dy); },
+		onPanResponderRelease: function (_event, gesture): void { latest.current.onEnd(gesture.dy); },
+		onPanResponderTerminate: function (): void { latest.current.onCancel(); }
+	})).current;
+	return(
+		<View accessibilityLabel="Drag to reorder step" accessibilityRole="button" style={styles.sequenceStepHandle} {...responder.panHandlers}>
+			<Text style={styles.sequenceStepGlyph}>≡</Text>
+		</View>
+	);
+}
+
 function SequenceSteps(props: {
 	steps: SequenceStep[];
 	profiles: StoredProfile[];
@@ -1425,31 +1477,50 @@ function SequenceSteps(props: {
 }): React.JSX.Element {
 	const { styles } = useContext(ThemeContext);
 	const depth = props.depth ?? 1;
-	function move(index: number, offset: number): void {
-		const steps = [...props.steps];
-		const current = steps[index];
-		const other = steps[index + offset];
-		if (current === undefined || other === undefined) {
+	const [dragging, setDragging] = useState<{ index: number; dy: number } | undefined>(undefined);
+	const layouts = useRef<{ y: number; height: number }[]>([]);
+	function finishDrag(from: number, dy: number): void {
+		setDragging(undefined);
+		const to = stepDropIndex(layouts.current, from, dy);
+		if (to === from) {
 			return;
 		}
-		steps[index] = other;
-		steps[index + offset] = current;
+		const steps = [...props.steps];
+		const [moved] = steps.splice(from, 1);
+		if (moved === undefined) {
+			return;
+		}
+		steps.splice(to, 0, moved);
 		props.onChange?.(steps);
+	}
+	function removeStep(index: number): void {
+		props.onChange?.(props.steps.filter(function (_, itemIndex): boolean { return(itemIndex !== index); }));
+	}
+	function stepChrome(index: number): React.JSX.Element | null {
+		if (props.onChange === undefined) {
+			return(null);
+		}
+		return(<>
+			<StepDragHandle onStart={function (): void { setDragging({ index: index, dy: 0 }); }} onMove={function (dy): void { setDragging({ index: index, dy: dy }); }} onEnd={function (dy): void { finishDrag(index, dy); }} onCancel={function (): void { setDragging(undefined); }} />
+			<Pressable accessibilityRole="button" accessibilityLabel={`Remove step ${index + 1}`} onPress={function (): void { removeStep(index); }} style={styles.sequenceStepClose}>
+				<Text style={styles.sequenceStepGlyph}>✕</Text>
+			</Pressable>
+		</>);
+	}
+	function stepStyle(index: number): StyleProp<ViewStyle> {
+		return([styles.sequenceStep, props.onChange !== undefined && styles.sequenceStepEditable, dragging?.index === index && { transform: [{ translateY: dragging.dy }], zIndex: 5, opacity: 0.85 }]);
+	}
+	function stepLayout(index: number): (event: LayoutChangeEvent) => void {
+		return function (event): void { layouts.current[index] = { y: event.nativeEvent.layout.y, height: event.nativeEvent.layout.height }; };
 	}
 	return(
 		<View style={styles.sequenceSteps}>
 			{props.steps.map(function (step, index): React.JSX.Element {
 				if (step.profile.kind === 'rest') {
 					return(
-						<View key={index} style={styles.sequenceStep}>
-							<Text style={styles.profileDescription}>{index + 1}. Rest for {step.profile.seconds} second(s)</Text>
-							{props.onChange !== undefined && <View style={styles.sequenceStepButtons}>
-								<Button title="Move up" disabled={index === 0} onPress={function (): void { move(index, -1); }} />
-								<Button title="Move down" disabled={index === props.steps.length - 1} onPress={function (): void { move(index, 1); }} />
-								<Button title="Remove step" color="#75113d" onPress={function (): void {
-									props.onChange?.(props.steps.filter(function (_, itemIndex): boolean { return(itemIndex !== index); }));
-								}} />
-							</View>}
+						<View key={index} onLayout={stepLayout(index)} style={stepStyle(index)}>
+							<Text style={styles.sequenceStepText}>{index + 1}. Rest for {step.profile.seconds} second(s)</Text>
+							{stepChrome(index)}
 						</View>
 					);
 				}
@@ -1465,16 +1536,14 @@ function SequenceSteps(props: {
 				const isOutOfDate = sequenceStepHasChanged(step, props.profiles);
 				const canSynchronize = isOutOfDate && source !== undefined && source.profile.kind !== 'ai';
 				return(
-					<View key={index} style={styles.sequenceStep}>
-						<Text style={styles.profileDescription}>{index + 1}. {name}{isOutOfDate ? ' \u2022' : ''}</Text>
-						{isOutOfDate && <Text style={styles.help}>{canSynchronize ? 'The saved profile has changed.' : 'The saved profile is missing.'}</Text>}
+					<View key={index} onLayout={stepLayout(index)} style={stepStyle(index)}>
+						<Text style={styles.sequenceStepText}>{index + 1}. {name}{isOutOfDate ? ' \u2022' : ''}</Text>
+						{isOutOfDate && <Text style={styles.sequenceStepText}>{canSynchronize ? 'The saved profile has changed.' : 'The saved profile is missing.'}</Text>}
 						{effectiveProfile.kind === 'sequence' && depth < maximumSequenceDepth && <View style={styles.sequenceNestedSteps}>
 							<SequenceSteps steps={effectiveProfile.steps} profiles={props.profiles} depth={depth + 1} />
 						</View>}
-						{props.onChange !== undefined && <View style={styles.sequenceStepButtons}>
-							<Button title="Move up" disabled={index === 0} onPress={function (): void { move(index, -1); }} />
-							<Button title="Move down" disabled={index === props.steps.length - 1} onPress={function (): void { move(index, 1); }} />
-							{canSynchronize && <Button title="Update step" onPress={function (): void {
+						{canSynchronize && props.onChange !== undefined && <View style={styles.sequenceStepButtons}>
+							<Button title="Update step" onPress={function (): void {
 								const updated = synchronizeSequenceStep(step, props.profiles);
 								props.onChange?.(props.steps.map(function (item, itemIndex): SequenceStep {
 									if (itemIndex === index) {
@@ -1482,11 +1551,9 @@ function SequenceSteps(props: {
 									}
 									return(item);
 								}));
-							}} />}
-							<Button title="Remove step" color="#75113d" onPress={function (): void {
-								props.onChange?.(props.steps.filter(function (_, itemIndex): boolean { return(itemIndex !== index); }));
 							}} />
 						</View>}
+						{stepChrome(index)}
 					</View>
 				);
 			})}
@@ -1792,6 +1859,10 @@ function createStyles(colors: AppColors) {
 	sectionDropShadow: { backgroundColor: 'rgba(77, 20, 48, 0.42)', borderRadius: 18, bottom: 8, left: 4, position: 'absolute', right: 0, top: 0 },
 	sectionGlass: { borderColor: 'rgba(255, 255, 255, 0.72)', borderWidth: 1, elevation: 4 },
 	sectionGlassHighlight: { backgroundColor: 'rgba(255, 255, 255, 0.28)', borderRadius: 14, height: '30%', left: 5, position: 'absolute', right: 5, top: 3 },
+	sectionTitleWithMenu: { paddingRight: 36 },
+	sectionMenuButton: { position: 'absolute', top: 10, right: 8, paddingHorizontal: 10, paddingVertical: 4, zIndex: 11 },
+	sectionMenu: { position: 'absolute', top: 44, right: 12, backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1, borderRadius: 8, elevation: 8, zIndex: 12, shadowColor: '#000', shadowOpacity: 0.25, shadowRadius: 6, shadowOffset: { width: 0, height: 2 }, minWidth: 190 },
+	sectionMenuOpen: { minHeight: 190 },
 	sectionTitle: { color: colors.title, fontSize: 21, fontWeight: '700' },
 	help: { color: colors.text, lineHeight: 20 },
 	field: { gap: 4 },
@@ -1809,13 +1880,14 @@ function createStyles(colors: AppColors) {
 	profile: { alignItems: 'center', backgroundColor: colors.surface, borderRadius: 8, flexDirection: 'row', gap: 12, justifyContent: 'space-between', marginTop: 2, padding: 14 },
 	journey: { alignItems: 'center', backgroundColor: colors.surface, borderRadius: 8, flexDirection: 'row', gap: 12, justifyContent: 'space-between', marginTop: 2, padding: 14 },
 	journeyMenuOpen: { zIndex: 10 },
+	profileButtonsWithMenu: { paddingTop: 34 },
 	journeyText: { paddingTop: 20 },
 	journeyMenuButton: { position: 'absolute', top: 2, right: 4, paddingHorizontal: 10, paddingVertical: 4, zIndex: 11 },
 	journeyMenuGlyph: { color: colors.text, fontSize: 22, fontWeight: '700' },
 	journeyMenu: { position: 'absolute', top: 34, right: 8, backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1, borderRadius: 8, elevation: 8, zIndex: 12, shadowColor: '#000', shadowOpacity: 0.25, shadowRadius: 6, shadowOffset: { width: 0, height: 2 }, minWidth: 180 },
 	journeyMenuItem: { paddingHorizontal: 14, paddingVertical: 12 },
 	journeyMenuText: { color: colors.text, fontSize: 16 },
-	journeyMenuDelete: { color: '#c62828' },
+	journeyMenuDelete: { color: colors.error },
 	journeyMenuDisabled: { opacity: 0.4 },
 	profileText: { flex: 1, gap: 3 },
 	profileName: { color: colors.text, fontSize: 17, fontWeight: '700' },
@@ -1874,7 +1946,12 @@ function createStyles(colors: AppColors) {
 	frequencyRange: { borderColor: colors.border, borderRadius: 8, borderWidth: 1, gap: 8, padding: 10 },
 	sequenceSteps: { gap: 8 },
 	sequenceNestedSteps: { marginLeft: 12 },
-	sequenceStep: { borderColor: colors.border, borderRadius: 8, borderWidth: 1, padding: 10, gap: 5 },
+	sequenceStep: { backgroundColor: colors.stepCard, borderColor: colors.stepCardText, borderRadius: 8, borderWidth: 1, padding: 10, gap: 5 },
+	sequenceStepEditable: { paddingLeft: 40, paddingRight: 40 },
+	sequenceStepText: { color: colors.stepCardText },
+	sequenceStepHandle: { position: 'absolute', left: 0, top: 0, bottom: 0, width: 40, alignItems: 'center', justifyContent: 'center' },
+	sequenceStepClose: { position: 'absolute', right: 2, top: 2, paddingHorizontal: 10, paddingVertical: 6 },
+	sequenceStepGlyph: { color: colors.stepCardText, fontSize: 20, fontWeight: '700' },
 	sequenceStepButtons: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 }
 	}));
 }

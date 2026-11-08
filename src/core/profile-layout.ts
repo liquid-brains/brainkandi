@@ -3,7 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { ProfileID } from './profiles';
 
 export type ProfileTile = { kind: 'profile'; profileID: ProfileID };
-export type ProfileFolder = { kind: 'folder'; id: string; name: string; profiles: ProfileID[] };
+export type ProfileFolder = { kind: 'folder'; id: string; name: string; profiles: ProfileID[]; collapsed?: boolean };
 export type ProfileLayout = (ProfileTile | ProfileFolder | null)[];
 
 const layoutStorageKey = 'brainkandi.profile-layout.v1';
@@ -32,7 +32,11 @@ export function decodeProfileLayout(serialized: string): ProfileLayout {
 			}
 			if (slot.kind === 'folder' && 'id' in slot && typeof slot.id === 'string' && slot.id !== '' && !folders.has(slot.id) && 'name' in slot && typeof slot.name === 'string' && slot.name.trim() !== '' && 'profiles' in slot && Array.isArray(slot.profiles)) {
 				folders.add(slot.id);
-				return({ kind: 'folder', id: slot.id, name: slot.name.trim(), profiles: slot.profiles.map(profileID) });
+				const decoded: ProfileFolder = { kind: 'folder', id: slot.id, name: slot.name.trim(), profiles: slot.profiles.map(profileID) };
+				if ('collapsed' in slot && slot.collapsed === true) {
+					decoded.collapsed = true;
+				}
+				return(decoded);
 			}
 		}
 		throw(new Error('Saved profile layout contains an invalid item.'));
@@ -60,41 +64,86 @@ export function reconcileProfileLayout(layout: ProfileLayout, profileIDs: Profil
 	return(updated);
 }
 
-export function dropProfileTile(layout: ProfileLayout, from: number, to: number): ProfileLayout {
-	if (!Number.isInteger(from) || !Number.isInteger(to) || from < 0 || to < 0 || to >= layout.length) {
-		return(layout);
-	}
-	const source = layout[from];
-	if (source === undefined || source === null || from === to) {
-		return(layout);
-	}
-	const target = layout[to] ?? null;
-	const updated = [...layout];
-	if (source.kind === 'profile' && target?.kind === 'folder') {
-		updated[to] = { ...target, profiles: [...target.profiles, source.profileID] };
-		updated[from] = null;
-	} else {
-		updated.splice(from, 1);
-		updated.splice(to, 0, source);
-	}
-	return(updated.filter(function (slot) { return(slot !== null); }));
+function withoutProfile(layout: ProfileLayout, profileID: ProfileID): ProfileLayout {
+	return(layout.flatMap(function (slot): (ProfileTile | ProfileFolder)[] {
+		if (slot === null || (slot.kind === 'profile' && slot.profileID === profileID)) {
+			return([]);
+		}
+		if (slot.kind === 'folder') {
+			return([{ ...slot, profiles: slot.profiles.filter(function (id): boolean { return(id !== profileID); }) }]);
+		}
+		return([slot]);
+	}));
 }
 
-export function moveProfileOut(layout: ProfileLayout, folderID: string, profileID: ProfileID): ProfileLayout {
-	const folder = layout.find(function (slot): boolean { return(slot?.kind === 'folder' && slot.id === folderID); });
-	if (folder?.kind !== 'folder' || !folder.profiles.includes(profileID)) {
+function containsProfile(layout: ProfileLayout, profileID: ProfileID): boolean {
+	return(layout.some(function (slot): boolean {
+		return(slot?.kind === 'profile' ? slot.profileID === profileID : slot?.profiles.includes(profileID) === true);
+	}));
+}
+
+export function addProfileFolder(layout: ProfileLayout, id: string, name: string): ProfileLayout {
+	const trimmed = name.trim();
+	return(trimmed === '' ? layout : [...layout, { kind: 'folder', id: id, name: trimmed, profiles: [] }]);
+}
+
+export function renameProfileFolder(layout: ProfileLayout, folderID: string, name: string): ProfileLayout {
+	const trimmed = name.trim();
+	if (trimmed === '') {
 		return(layout);
 	}
-	const updated = layout.map(function (slot) {
-		if (slot !== folder) {
+	return(layout.map(function (slot) { return(slot?.kind === 'folder' && slot.id === folderID ? { ...slot, name: trimmed } : slot); }));
+}
+
+export function toggleProfileFolder(layout: ProfileLayout, folderID: string): ProfileLayout {
+	return(layout.map(function (slot) {
+		if (slot?.kind !== 'folder' || slot.id !== folderID) {
 			return(slot);
 		}
-		const profiles = folder.profiles.filter(function (id): boolean { return(id !== profileID); });
-		return({ ...folder, profiles: profiles });
-	}).filter(function (slot) { return(slot !== null); });
+		const { collapsed, ...rest } = slot;
+		return(collapsed === true ? rest : { ...rest, collapsed: true });
+	}));
+}
+
+// Drops a profile before or after another profile, joining the target's folder when it has one.
+export function moveProfileTo(layout: ProfileLayout, profileID: ProfileID, targetID: ProfileID, after: boolean): ProfileLayout {
+	if (profileID === targetID || !containsProfile(layout, profileID) || !containsProfile(layout, targetID)) {
+		return(layout);
+	}
+	const base = withoutProfile(layout, profileID);
 	const tile: ProfileTile = { kind: 'profile', profileID: profileID };
-	updated.push(tile);
-	return(updated);
+	return(base.flatMap(function (slot): (ProfileTile | ProfileFolder)[] {
+		if (slot === null) {
+			return([]);
+		}
+		if (slot.kind === 'profile') {
+			if (slot.profileID !== targetID) {
+				return([slot]);
+			}
+			return(after ? [slot, tile] : [tile, slot]);
+		}
+		const index = slot.profiles.indexOf(targetID);
+		if (index === -1) {
+			return([slot]);
+		}
+		const profiles = [...slot.profiles];
+		profiles.splice(after ? index + 1 : index, 0, profileID);
+		return([{ ...slot, profiles: profiles }]);
+	}));
+}
+
+// Drops a profile at the end of a folder, or among the unfiled profiles when folderID is undefined.
+export function moveProfileToFolderEnd(layout: ProfileLayout, profileID: ProfileID, folderID: string | undefined): ProfileLayout {
+	if (!containsProfile(layout, profileID)) {
+		return(layout);
+	}
+	if (folderID === undefined) {
+		return([...withoutProfile(layout, profileID), { kind: 'profile', profileID: profileID }]);
+	}
+	if (!layout.some(function (slot): boolean { return(slot?.kind === 'folder' && slot.id === folderID); })) {
+		return(layout);
+	}
+	return(addProfileToFolder(withoutProfile(layout, profileID), folderID, profileID));
 }
 
 export function addProfileToFolder(layout: ProfileLayout, folderID: string, profileID: ProfileID): ProfileLayout {
