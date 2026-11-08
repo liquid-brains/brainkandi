@@ -25,11 +25,17 @@ export function ProtocolViewer(props: { journey: Journey; colors: AppColors; sho
 			{files.length > 1 && (
 				<View>
 					<Text style={styles.text}>Protocol file</Text>
-					<Picker accessibilityLabel="Protocol file" selectedValue={fileIndex} onValueChange={function (value: number): void { setFileIndex(value); }} style={styles.picker}>
+					<View style={styles.pickerRow}>
+						<Pressable accessibilityRole="button" accessibilityLabel="Previous protocol file" onPress={function (): void { setFileIndex((fileIndex + files.length - 1) % files.length); }} style={styles.arrow}><Text style={styles.arrowText}>◀</Text></Pressable>
+						<View style={styles.pickerFlex}>
+						<Picker accessibilityLabel="Protocol file" selectedValue={fileIndex} onValueChange={function (value: number): void { setFileIndex(value); }} style={styles.picker}>
 						{files.map(function (item, index) {
 							return(<Picker.Item key={index} label={`${index + 1}. ${item.fileName}${feedbackLabel(feedbackCounts[index])}`} value={index} />);
 						})}
 					</Picker>
+						</View>
+						<Pressable accessibilityRole="button" accessibilityLabel="Next protocol file" onPress={function (): void { setFileIndex((fileIndex + 1) % files.length); }} style={styles.arrow}><Text style={styles.arrowText}>▶</Text></Pressable>
+					</View>
 				</View>
 			)}
 			{file !== undefined && <Text style={styles.fileName}>{file.fileName}</Text>}
@@ -127,6 +133,10 @@ function createStyles(colors: AppColors) {
 		title: { color: colors.title, fontSize: 24, fontWeight: '800', textAlign: 'center' },
 		text: { color: colors.text, lineHeight: 20 },
 		fileName: { color: colors.title, fontSize: 20, fontWeight: '700', textAlign: 'center' },
+		pickerRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+		pickerFlex: { flex: 1 },
+		arrow: { paddingHorizontal: 10, paddingVertical: 8 },
+		arrowText: { color: colors.accent, fontSize: 16 },
 		picker: { backgroundColor: colors.surface, color: colors.inputText, borderColor: colors.border, borderWidth: 1, borderRadius: 8 },
 		legend: { alignItems: 'center', borderColor: colors.border, borderRadius: 8, borderWidth: 1, flexDirection: 'row', flexWrap: 'wrap', gap: 16, justifyContent: 'center', padding: 10 },
 		legendItem: { alignItems: 'center', flexDirection: 'row', gap: 6 },
