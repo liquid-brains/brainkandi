@@ -19,6 +19,7 @@ export function ProfileLauncher(props: {
 	buttonComponent: (props: { title: string; color?: string; disabled?: boolean; onPress: () => void }) => React.JSX.Element;
 	disabled: boolean;
 	onChange: (layout: ProfileLayout) => void;
+	raisedProfileID?: string | undefined;
 	renderProfile: (profile: StoredProfile) => React.JSX.Element;
 	onDragging: (dragging: boolean) => void;
 	isNamingFolder: boolean;
@@ -163,7 +164,7 @@ export function ProfileLauncher(props: {
 			return(null);
 		}
 		return(
-			<View key={profileID} ref={register(`item:${profileID}`)} collapsable={false}>
+			<View key={profileID} ref={register(`item:${profileID}`)} collapsable={false} style={props.raisedProfileID === profileID ? styles.raised : undefined}>
 				<Pressable
 					accessibilityHint="Hold to drag."
 					accessible={false}
@@ -196,7 +197,7 @@ export function ProfileLauncher(props: {
 		>
 			{folders.map(function (folder): React.JSX.Element {
 				return(
-					<View key={folder.id} ref={register(`zone:${folder.id}`)} collapsable={false} style={[styles.folder, drag !== undefined && styles.folderTarget]}>
+					<View key={folder.id} ref={register(`zone:${folder.id}`)} collapsable={false} style={[styles.folder, drag !== undefined && styles.folderTarget, props.raisedProfileID !== undefined && folder.profiles.some(function (id): boolean { return(id === props.raisedProfileID); }) && styles.raised]}>
 						<Pressable accessibilityRole="button" accessibilityLabel={`Delete folder ${folder.name}`} disabled={props.disabled} onPress={function (): void { props.onChange(deleteProfileFolder(props.layout, folder.id)); }} style={styles.close}>
 							<Text style={styles.glyph}>✕</Text>
 						</Pressable>
@@ -260,6 +261,7 @@ function makeStyles(colors: AppColors) {
 		unfiled: { gap: 10 },
 		unfiledArea: { borderColor: 'transparent', borderRadius: 10, borderStyle: 'dashed', borderWidth: 1, minHeight: 56, padding: 4 },
 		unfiledTarget: { borderColor: colors.accent },
+		raised: { zIndex: 10 },
 		moving: { opacity: 0.4 },
 		name: { color: colors.text, fontSize: 17, fontWeight: '700' },
 		help: { color: colors.text, fontSize: 12, marginVertical: 4 },
