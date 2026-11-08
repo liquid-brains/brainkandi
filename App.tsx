@@ -982,7 +982,7 @@ export default function App(): React.JSX.Element {
 		}
 	}
 
-	function renderProfile(item: StoredProfile, inFolder: boolean): React.JSX.Element {
+	function renderProfile(item: StoredProfile): React.JSX.Element {
 		let validationErrors: BrainlightError[] = [];
 		if (item.profile.kind === 'random') {
 			validationErrors = getRandomFormValidationErrors(randomFormFromProfile(item.profile));
@@ -996,9 +996,9 @@ export default function App(): React.JSX.Element {
 			}
 		}
 		return(
-			<View style={[styles.profile, inFolder ? styles.folderCard : undefined, menuProfileID === item.id ? styles.journeyMenuOpen : undefined]}>
+			<View style={[styles.profile, menuProfileID === item.id ? styles.journeyMenuOpen : undefined]}>
 				<Pressable accessibilityRole="button" accessibilityLabel="Profile actions" onPress={function (): void { setMenuProfileID(menuProfileID === item.id ? undefined : item.id); }} style={styles.journeyMenuButton}>
-					<Text style={[styles.journeyMenuGlyph, inFolder ? styles.folderCardText : undefined]}>⋮</Text>
+					<Text style={styles.journeyMenuGlyph}>⋮</Text>
 				</Pressable>
 				{menuProfileID === item.id && (
 					<View style={styles.journeyMenu}>
@@ -1014,9 +1014,9 @@ export default function App(): React.JSX.Element {
 					</View>
 				)}
 				<View style={[styles.profileText, styles.journeyText]}>
-					<Text style={[styles.profileName, inFolder ? styles.folderCardText : undefined]}>{item.profile.name}</Text>
-					<Text style={[styles.profileDescription, inFolder ? styles.folderCardText : undefined]}>{profileDescription(item.profile)}</Text>
-					{item.profile.description === undefined ? null : <Text style={[styles.profileDescription, inFolder ? styles.folderCardText : undefined]}>{item.profile.description}</Text>}
+					<Text style={styles.profileName}>{item.profile.name}</Text>
+					<Text style={styles.profileDescription}>{profileDescription(item.profile)}</Text>
+					{item.profile.description === undefined ? null : <Text style={styles.profileDescription}>{item.profile.description}</Text>}
 					{validationErrors.length > 0 && <Text style={styles.fieldError}>Cannot run: {validationErrors[0]?.message} Edit the highlighted fields.</Text>}
 					{sequenceError !== undefined && <Text style={styles.fieldError}>Cannot run: {sequenceError}</Text>}
 					{item.profile.kind === 'sequence' && <SequenceSteps steps={item.profile.steps} profiles={profiles} />}
@@ -1519,7 +1519,7 @@ function SequenceSteps(props: {
 				if (step.profile.kind === 'rest') {
 					return(
 						<View key={index} onLayout={stepLayout(index)} style={stepStyle(index)}>
-							<Text style={styles.profileDescription}>{index + 1}. Rest for {step.profile.seconds} second(s)</Text>
+							<Text style={styles.sequenceStepText}>{index + 1}. Rest for {step.profile.seconds} second(s)</Text>
 							{stepChrome(index)}
 						</View>
 					);
@@ -1537,8 +1537,8 @@ function SequenceSteps(props: {
 				const canSynchronize = isOutOfDate && source !== undefined && source.profile.kind !== 'ai';
 				return(
 					<View key={index} onLayout={stepLayout(index)} style={stepStyle(index)}>
-						<Text style={styles.profileDescription}>{index + 1}. {name}{isOutOfDate ? ' \u2022' : ''}</Text>
-						{isOutOfDate && <Text style={styles.help}>{canSynchronize ? 'The saved profile has changed.' : 'The saved profile is missing.'}</Text>}
+						<Text style={styles.sequenceStepText}>{index + 1}. {name}{isOutOfDate ? ' \u2022' : ''}</Text>
+						{isOutOfDate && <Text style={styles.sequenceStepText}>{canSynchronize ? 'The saved profile has changed.' : 'The saved profile is missing.'}</Text>}
 						{effectiveProfile.kind === 'sequence' && depth < maximumSequenceDepth && <View style={styles.sequenceNestedSteps}>
 							<SequenceSteps steps={effectiveProfile.steps} profiles={props.profiles} depth={depth + 1} />
 						</View>}
@@ -1892,8 +1892,6 @@ function createStyles(colors: AppColors) {
 	profileText: { flex: 1, gap: 3 },
 	profileName: { color: colors.text, fontSize: 17, fontWeight: '700' },
 	profileDescription: { color: colors.text },
-	folderCard: { backgroundColor: colors.folderCard },
-	folderCardText: { color: colors.folderCardText },
 	journalEntry: { color: colors.text, fontStyle: 'italic', lineHeight: 20, marginTop: 4 },
 	profileButtons: { gap: 5 },
 	glassButton: {
@@ -1948,11 +1946,12 @@ function createStyles(colors: AppColors) {
 	frequencyRange: { borderColor: colors.border, borderRadius: 8, borderWidth: 1, gap: 8, padding: 10 },
 	sequenceSteps: { gap: 8 },
 	sequenceNestedSteps: { marginLeft: 12 },
-	sequenceStep: { borderColor: colors.border, borderRadius: 8, borderWidth: 1, padding: 10, gap: 5 },
+	sequenceStep: { backgroundColor: colors.stepCard, borderColor: colors.stepCardText, borderRadius: 8, borderWidth: 1, padding: 10, gap: 5 },
 	sequenceStepEditable: { paddingLeft: 40, paddingRight: 40 },
+	sequenceStepText: { color: colors.stepCardText },
 	sequenceStepHandle: { position: 'absolute', left: 0, top: 0, bottom: 0, width: 40, alignItems: 'center', justifyContent: 'center' },
 	sequenceStepClose: { position: 'absolute', right: 2, top: 2, paddingHorizontal: 10, paddingVertical: 6 },
-	sequenceStepGlyph: { color: colors.text, fontSize: 20, fontWeight: '700' },
+	sequenceStepGlyph: { color: colors.stepCardText, fontSize: 20, fontWeight: '700' },
 	sequenceStepButtons: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 }
 	}));
 }
