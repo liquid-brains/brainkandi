@@ -1017,7 +1017,7 @@ export default function App(): React.JSX.Element {
 					{sequenceError !== undefined && <Text style={styles.fieldError}>Cannot run: {sequenceError}</Text>}
 					{item.profile.kind === 'sequence' && <SequenceSteps steps={item.profile.steps} profiles={profiles} />}
 				</View>
-				<View style={[styles.profileButtons, styles.journeyText]}>
+				<View style={[styles.profileButtons, styles.profileButtonsWithMenu]}>
 					<Button title="Run" disabled={isRunning || item.profile.kind === 'ai' || validationErrors.length > 0 || sequenceError !== undefined} onPress={function (): void { runSavedProfile(item); }} />
 					<Button title="View / edit" disabled={isRunning} onPress={function (): void { openProfileEditor(item); }} />
 				</View>
@@ -1841,6 +1841,7 @@ function createStyles(colors: AppColors) {
 	profile: { alignItems: 'center', backgroundColor: colors.surface, borderRadius: 8, flexDirection: 'row', gap: 12, justifyContent: 'space-between', marginTop: 2, padding: 14 },
 	journey: { alignItems: 'center', backgroundColor: colors.surface, borderRadius: 8, flexDirection: 'row', gap: 12, justifyContent: 'space-between', marginTop: 2, padding: 14 },
 	journeyMenuOpen: { zIndex: 10 },
+	profileButtonsWithMenu: { paddingTop: 34 },
 	journeyText: { paddingTop: 20 },
 	journeyMenuButton: { position: 'absolute', top: 2, right: 4, paddingHorizontal: 10, paddingVertical: 4, zIndex: 11 },
 	journeyMenuGlyph: { color: colors.text, fontSize: 22, fontWeight: '700' },
