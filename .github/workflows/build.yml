@@ -129,6 +129,13 @@ jobs:
         shell: pwsh
         run: Compress-Archive -Path dist-desktop/BrainKandi-win32-* -DestinationPath dist-desktop/brainkandi-windows.zip
 
+      - name: Sign macOS app (ad hoc)
+        if: matrix.platform == 'macOS'
+        run: |
+          app=$(echo dist-desktop/BrainKandi-darwin-*/BrainKandi.app)
+          codesign --force --deep --sign - "$app"
+          codesign --verify --deep --strict --verbose=2 "$app"
+
       - name: Archive macOS app
         if: matrix.platform == 'macOS'
         run: ditto -c -k --sequesterRsrc --keepParent dist-desktop/BrainKandi-darwin-*/BrainKandi.app dist-desktop/brainkandi-macos.zip
