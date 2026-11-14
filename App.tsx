@@ -11,6 +11,7 @@ import {
 	Modal,
 	PanResponder,
 	Platform,
+	useWindowDimensions,
 	Pressable,
 	ScrollView,
 	StyleSheet,
@@ -375,6 +376,8 @@ export default function App(): React.JSX.Element {
 	const [journeys, setJourneys] = useState<Journey[]>([]);
 	const [isJournalBrowserOpen, setIsJournalBrowserOpen] = useState(false);
 	const [journalSort, setJournalSort] = useState<JournalSort>('newest');
+	const { width: windowWidth } = useWindowDimensions();
+	const isWideLayout = windowWidth >= 900;
 	const [status, setStatus] = useState('Ready.');
 	const [isRunning, setIsRunning] = useState(false);
 	const [feedbackStatus, setFeedbackStatus] = useState<string | undefined>();
@@ -1126,7 +1129,8 @@ export default function App(): React.JSX.Element {
 						<Text style={styles.activeDevice}>Device: {deviceAddress}</Text>
 						{renderStopSessionButton()}
 
-						<View style={isRunning ? styles.hidden : styles.sectionGroup}>
+						<View style={isRunning ? styles.hidden : [styles.sectionGroup, isWideLayout && styles.sectionGroupWide]}>
+						<View style={isWideLayout ? styles.sectionColumn : undefined}>
 						<Section title="Profiles" menuItems={[
 							{ label: 'New profile', disabled: isRunning || isLoadingProfiles || isSavingLayout, onPress: openProfileCreation },
 							{ label: 'Import profile file', disabled: isRunning || isLoadingProfiles || isSavingLayout, onPress: function (): void { void importProfileFile(); } },
@@ -1147,13 +1151,16 @@ export default function App(): React.JSX.Element {
 							/>
 							{renderEmptyProfiles()}
 						</Section>
+						</View>
 
+						<View style={isWideLayout ? styles.sectionColumn : undefined}>
 						<Section title="Journal">
 							{journeys.slice(0, 3).map(renderJourney)}
 							{menuJourneyID !== undefined && <View style={{ height: 130 }} />}
 							{journeys.length === 0 ? <Text style={styles.empty}>No journal records yet.</Text> : null}
 							{journeys.length > 3 ? <Button title={`View all ${journeys.length} journal records`} onPress={function (): void { setIsJournalBrowserOpen(true); }} /> : null}
 						</Section>
+						</View>
 						</View>
 
 					</ScrollView>
@@ -1845,6 +1852,8 @@ function createStyles(colors: AppColors) {
 	menuLine: { width: 24, height: 3, backgroundColor: colors.onBackground, borderRadius: 2 },
 	hidden: { display: 'none' },
 	sectionGroup: { gap: 18 },
+	sectionGroupWide: { alignItems: 'flex-start', flexDirection: 'row' },
+	sectionColumn: { flex: 1 },
 	settingsHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
 	settingRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 16 },
 	actionHelpRow: { alignItems: 'center', flexDirection: 'row', gap: 8 },

@@ -16,6 +16,7 @@
       "./plugins/with-session-background.js",
       "./plugins/with-android-cleartext.js",
       "./plugins/with-volume-keys.js",
+      "./plugins/with-tablet-rotation.js",
       "expo-sharing",
       "expo-audio",
       "expo-asset"
