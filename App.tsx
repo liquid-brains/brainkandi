@@ -53,6 +53,7 @@ import { ProtocolViewer } from './src/ui/ProtocolViewer';
 import type { SavedDevice } from './src/core/device-store';
 import type { Journey, JourneyFile, JourneyRating } from './src/core/journey-store';
 import { encapsulateSharedProfile } from './src/core/profile-codec';
+import { randomParametersSummary } from './src/core/profile-summary';
 import type { ProfileID, SequenceStep, SessionProfile, StoredProfile } from './src/core/profiles';
 import { maximumSequenceDepth } from './src/core/profiles';
 import { createRestStep, createSequenceStep, resolveSequenceProfile, runnableProfileSteps, sequenceStepHasChanged, synchronizeSequenceStep } from './src/core/sequences';
@@ -292,11 +293,7 @@ function profileDescription(profile: SessionProfile): string {
 			if (profile.input !== undefined) {
 				return('Profile: draft input; edit highlighted fields before running.');
 			}
-			const ranges = profile.parameters.frequency.ranges.map(function (range): string {
-				return(`${range.max === undefined ? String(range.min) : `${range.min}-${range.max}`} Hz`);
-			});
-			const phase = profile.parameters.abCoupling?.distribution;
-			return(`Profile: ${profile.parameters.duration} minute(s), ${ranges.join(', ')}, Off ${profile.parameters.frequency.offPercentage ?? 0}%${phase === undefined ? '' : `, Phase A ${phase}%`}`);
+			return(`Profile: ${randomParametersSummary(profile.parameters)}`);
 		case 'ai':
 			return('Unsupported profile type');
 		case 'sequence':
@@ -385,6 +382,7 @@ export default function App(): React.JSX.Element {
 	const activeJourneyID = useRef<string | undefined>(undefined);
 	const activeJourney = useRef<Journey | undefined>(undefined);
 	const runningFileName = useRef<string | undefined>(undefined);
+	const [runningView, setRunningView] = useState<{ journey: Journey; fileName: string | undefined; version: number } | undefined>();
 	const hasStartedFile = useRef(false);
 	const [editingProfileID, setEditingProfileID] = useState<ProfileID | undefined>();
 	const [profileEditor, setProfileEditor] = useState<ProfileEditorValues | undefined>();
@@ -448,7 +446,7 @@ export default function App(): React.JSX.Element {
 		return(captureVolumeKeys(function (value): void {
 			const journey = activeJourney.current;
 			if (journey !== undefined && recordJourneyFeedback(journey, runningFileName.current, value)) {
-				Vibration.vibrate(value === 1 ? 60 : [0, 60, 80, 60]);
+				Vibration.vibrate(value === 1 ? 250 : [0, 250, 120, 250]);
 				setFeedbackStatus(value === 1 ? 'Recorded: this feels like it is working.' : 'Recorded: this does not feel like it is working.');
 			}
 		}));
@@ -611,6 +609,7 @@ export default function App(): React.JSX.Element {
 		};
 		activeJourneyID.current = journey.id;
 		activeJourney.current = journey;
+		setRunningView({ journey: journey, fileName: undefined, version: 0 });
 		setFeedbackStatus(undefined);
 		runningFileName.current = undefined;
 		hasStartedFile.current = false;
@@ -624,6 +623,7 @@ export default function App(): React.JSX.Element {
 			await runWithSessionBackground(async function (): Promise<void> {
 				await operation(setStatus, function (fileName, data): void {
 					journey.files.push({ fileName: fileName, data: JSON.parse(JSON.stringify(data)) as Record<string, unknown> });
+					setRunningView(view => view === undefined ? view : { ...view, version: view.version + 1 });
 				}, function (fileName): void {
 					if (fileName !== undefined) {
 						if (!hasStartedFile.current) {
@@ -634,6 +634,7 @@ export default function App(): React.JSX.Element {
 						hasStartedFile.current = true;
 					}
 					runningFileName.current = fileName;
+					setRunningView(view => view === undefined ? view : { ...view, fileName: fileName, version: view.version + 1 });
 				});
 			});
 			journey.outcome = 'completed';
@@ -652,6 +653,7 @@ export default function App(): React.JSX.Element {
 				activeJourneyID.current = undefined;
 				activeJourney.current = undefined;
 				runningFileName.current = undefined;
+				setRunningView(undefined);
 				setIsRunning(false);
 			}
 		}
@@ -1041,7 +1043,7 @@ export default function App(): React.JSX.Element {
 				{menuJourneyID === journey.id && (
 					<View style={styles.journeyMenu}>
 						<Pressable accessibilityRole="menuitem" disabled={journey.outcome === 'running'} onPress={function (): void { setMenuJourneyID(undefined); setParametersJourney(journey); }} style={styles.journeyMenuItem}>
-							<Text style={[styles.journeyMenuText, journey.outcome === 'running' ? styles.journeyMenuDisabled : undefined]}>View parameters</Text>
+							<Text style={[styles.journeyMenuText, journey.outcome === 'running' ? styles.journeyMenuDisabled : undefined]}>View Protocol</Text>
 						</Pressable>
 						<Pressable accessibilityRole="menuitem" disabled={journey.outcome === 'running' || isRunning} onPress={function (): void { setMenuJourneyID(undefined); void createProfileFromJourney(journey); }} style={styles.journeyMenuItem}>
 							<Text style={[styles.journeyMenuText, journey.outcome === 'running' || isRunning ? styles.journeyMenuDisabled : undefined]}>Copy to new profile</Text>
@@ -1128,6 +1130,7 @@ export default function App(): React.JSX.Element {
 						{isRunning && feedbackStatus !== undefined && <Text style={styles.status} accessibilityLiveRegion="polite">{feedbackStatus}</Text>}
 						<Text style={styles.activeDevice}>Device: {deviceAddress}</Text>
 						{renderStopSessionButton()}
+						{isRunning && runningView !== undefined && <ProtocolViewer key={runningView.journey.id} journey={runningView.journey} colors={colors} showJSONCode={settings.showJSONCode} followFileName={runningView.fileName} />}
 
 						<View style={isRunning ? styles.hidden : [styles.sectionGroup, isWideLayout && styles.sectionGroupWide]}>
 						<View style={isWideLayout ? styles.sectionColumn : undefined}>

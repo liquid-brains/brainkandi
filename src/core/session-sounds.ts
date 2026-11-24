@@ -24,9 +24,9 @@ export function playSessionSound(sound: SessionSound): void {
 }
 
 const vibrationPatterns: Record<SessionSound, number[]> = {
-	start: [0, 200],
-	switch: [0, 100, 100, 100],
-	end: [0, 400]
+	start: [0, 500],
+	switch: [0, 300, 150, 300],
+	end: [0, 800]
 };
 
 export function vibrationAvailable(): boolean {
