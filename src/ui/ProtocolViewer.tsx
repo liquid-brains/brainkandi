@@ -7,10 +7,12 @@ import { feedbackCountsByFile, journeyProtocolFiles, protocolDiagramRows, protoc
 import type { AppColors } from './colors';
 import { brandColors } from './colors';
 
-export function ProtocolViewer(props: { journey: Journey; colors: AppColors; showJSONCode?: boolean }): React.JSX.Element {
-	const [fileIndex, setFileIndex] = useState(0);
+export function ProtocolViewer(props: { journey: Journey; colors: AppColors; showJSONCode?: boolean; followFileName?: string | undefined }): React.JSX.Element {
+	const [chosenIndex, setFileIndex] = useState(0);
 	const [jsonExpanded, setJsonExpanded] = useState(false);
 	const files = journeyProtocolFiles(props.journey);
+	const followedIndex = props.followFileName === undefined ? -1 : files.findIndex(item => item.fileName === props.followFileName);
+	const fileIndex = followedIndex >= 0 ? followedIndex : chosenIndex;
 	const file = files[fileIndex];
 	const feedbackCounts = feedbackCountsByFile(props.journey);
 	const hasFeedback = feedbackCounts.some(function (counts): boolean { return(counts.up + counts.down > 0); });
@@ -38,6 +40,7 @@ export function ProtocolViewer(props: { journey: Journey; colors: AppColors; sho
 					</View>
 				</View>
 			)}
+			{followedIndex >= 0 && <Text style={styles.heading}>Now running</Text>}
 			{file !== undefined && <Text style={styles.fileName}>{file.fileName}</Text>}
 			{hasFeedback && (
 				<View style={styles.feedback}>

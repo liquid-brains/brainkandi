@@ -96,7 +96,7 @@ describe('random session parameters', function () {
 				duration: 60,
 				frequency: { ranges: [{ min: 1, max: 9999, weight: 100 }] },
 				power: { min: 1, max: 140 },
-				coupling: { min: 0, max: 100, distribution: 100 },
+				coupling: { min: 1, max: 9999, distribution: 100 },
 				abCoupling: { distribution: 0 }
 			});
 		}).not.toThrow();
