@@ -13,14 +13,17 @@ export function ProtocolViewer(props: { journey: Journey; colors: AppColors; sho
 	const files = journeyProtocolFiles(props.journey);
 	const followedIndex = props.followFileName === undefined ? -1 : files.findIndex(item => item.fileName === props.followFileName);
 	const live = props.live === true;
-	const fileIndex = followedIndex >= 0 ? followedIndex : (live ? Math.max(files.length - 1, 0) : chosenIndex);
+	const fileIndex = followedIndex >= 0 ? followedIndex : (live ? -1 : chosenIndex);
 	const file = files[fileIndex];
 	const feedbackCounts = feedbackCountsByFile(props.journey);
 	const hasFeedback = feedbackCounts.some(function (counts): boolean { return(counts.up + counts.down > 0); });
 	const modules = file === undefined ? undefined : protocolModuleViews(file.data);
+	if (live && followedIndex < 0) {
+		return(<View />);
+	}
 	const styles = createStyles(props.colors);
 	const isBrand = props.colors === brandColors;
-	const phaseColors = isBrand ? { A: brandColors.section, B: brandColors.background } : (props.colors.background === '#14171c' ? { A: '#5f7f9e', B: '#9a6477' } : { A: '#8fa8bf', B: '#c4a0ad' });
+	const phaseColors = isBrand ? { A: brandColors.section, B: live ? brandColors.button : brandColors.background } : (props.colors.background === '#14171c' ? { A: '#5f7f9e', B: '#9a6477' } : { A: '#8fa8bf', B: '#c4a0ad' });
 	return(
 		<View style={styles.viewer}>
 			{!live && <Text style={styles.title}>{props.journey.profile.name}</Text>}
@@ -91,7 +94,6 @@ export function ProtocolViewer(props: { journey: Journey; colors: AppColors; sho
 							);
 						})}
 					</View>
-					{live && file !== undefined && <Text style={styles.fileName}>{file.fileName}</Text>}
 					{!live && <View style={styles.table}>
 						<View style={styles.tableRow}>
 							{['', 'PWR\n%', 'FREQ\nHZ', 'CROSS\nFREQ', 'PHASE', 'DELAY/\nACTIVE'].map(function (title) {
