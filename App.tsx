@@ -1130,7 +1130,7 @@ export default function App(): React.JSX.Element {
 						{isRunning && feedbackStatus !== undefined && <Text style={styles.status} accessibilityLiveRegion="polite">{feedbackStatus}</Text>}
 						<Text style={styles.activeDevice}>Device: {deviceAddress}</Text>
 						{renderStopSessionButton()}
-						{isRunning && runningView !== undefined && <ProtocolViewer key={runningView.journey.id} journey={runningView.journey} colors={colors} showJSONCode={settings.showJSONCode} followFileName={runningView.fileName} />}
+						{isRunning && runningView !== undefined && <ProtocolViewer key={runningView.journey.id} journey={runningView.journey} colors={colors} followFileName={runningView.fileName} live />}
 
 						<View style={isRunning ? styles.hidden : [styles.sectionGroup, isWideLayout && styles.sectionGroupWide]}>
 						<View style={isWideLayout ? styles.sectionColumn : undefined}>

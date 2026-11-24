@@ -7,12 +7,13 @@ import { feedbackCountsByFile, journeyProtocolFiles, protocolDiagramRows, protoc
 import type { AppColors } from './colors';
 import { brandColors } from './colors';
 
-export function ProtocolViewer(props: { journey: Journey; colors: AppColors; showJSONCode?: boolean; followFileName?: string | undefined }): React.JSX.Element {
+export function ProtocolViewer(props: { journey: Journey; colors: AppColors; showJSONCode?: boolean; followFileName?: string | undefined; live?: boolean }): React.JSX.Element {
 	const [chosenIndex, setFileIndex] = useState(0);
 	const [jsonExpanded, setJsonExpanded] = useState(false);
 	const files = journeyProtocolFiles(props.journey);
 	const followedIndex = props.followFileName === undefined ? -1 : files.findIndex(item => item.fileName === props.followFileName);
-	const fileIndex = followedIndex >= 0 ? followedIndex : chosenIndex;
+	const live = props.live === true;
+	const fileIndex = followedIndex >= 0 ? followedIndex : (live ? Math.max(files.length - 1, 0) : chosenIndex);
 	const file = files[fileIndex];
 	const feedbackCounts = feedbackCountsByFile(props.journey);
 	const hasFeedback = feedbackCounts.some(function (counts): boolean { return(counts.up + counts.down > 0); });
@@ -22,9 +23,9 @@ export function ProtocolViewer(props: { journey: Journey; colors: AppColors; sho
 	const phaseColors = isBrand ? { A: brandColors.section, B: brandColors.background } : (props.colors.background === '#14171c' ? { A: '#5f7f9e', B: '#9a6477' } : { A: '#8fa8bf', B: '#c4a0ad' });
 	return(
 		<View style={styles.viewer}>
-			<Text style={styles.title}>{props.journey.profile.name}</Text>
-			<Text style={styles.text}>Run started {new Date(props.journey.startedAt).toLocaleString()}</Text>
-			{files.length > 1 && (
+			{!live && <Text style={styles.title}>{props.journey.profile.name}</Text>}
+			{!live && <Text style={styles.text}>Run started {new Date(props.journey.startedAt).toLocaleString()}</Text>}
+			{!live && files.length > 1 && (
 				<View>
 					<Text style={styles.text}>Protocol file</Text>
 					<View style={styles.pickerRow}>
@@ -40,9 +41,8 @@ export function ProtocolViewer(props: { journey: Journey; colors: AppColors; sho
 					</View>
 				</View>
 			)}
-			{followedIndex >= 0 && <Text style={styles.heading}>Now running</Text>}
-			{file !== undefined && <Text style={styles.fileName}>{file.fileName}</Text>}
-			{hasFeedback && (
+			{!live && file !== undefined && <Text style={styles.fileName}>{file.fileName}</Text>}
+			{!live && hasFeedback && (
 				<View style={styles.feedback}>
 					<Text style={styles.heading}>Feedback during the session</Text>
 					{files.map(function (item, index) {
@@ -58,7 +58,7 @@ export function ProtocolViewer(props: { journey: Journey; colors: AppColors; sho
 				<Text style={styles.text}>{file === undefined ? 'No protocol files were recorded for this journey.' : 'No readable channel parameters were saved for this protocol.'}</Text>
 			) : (
 				<>
-					<View style={styles.legend}>
+					{!live && <View style={styles.legend}>
 						{(['A', 'B'] as const).map(function (phase) {
 							return(
 								<View key={phase} style={styles.legendItem}>
@@ -67,7 +67,7 @@ export function ProtocolViewer(props: { journey: Journey; colors: AppColors; sho
 								</View>
 							);
 						})}
-					</View>
+					</View>}
 					<View style={styles.grid}>
 						{protocolDiagramRows.map(function (row, index) {
 							return(
@@ -91,7 +91,8 @@ export function ProtocolViewer(props: { journey: Journey; colors: AppColors; sho
 							);
 						})}
 					</View>
-					<View style={styles.table}>
+					{live && file !== undefined && <Text style={styles.fileName}>{file.fileName}</Text>}
+					{!live && <View style={styles.table}>
 						<View style={styles.tableRow}>
 							{['', 'PWR\n%', 'FREQ\nHZ', 'CROSS\nFREQ', 'PHASE', 'DELAY/\nACTIVE'].map(function (title) {
 								return(<Text key={title} style={[styles.cell, styles.tableHeading]}>{title}</Text>);
@@ -106,10 +107,10 @@ export function ProtocolViewer(props: { journey: Journey; colors: AppColors; sho
 								</View>
 							);
 						})}
-					</View>
+					</View>}
 				</>
 			)}
-			{props.showJSONCode === true && file !== undefined && (
+			{!live && props.showJSONCode === true && file !== undefined && (
 				<View style={styles.jsonPanel}>
 					<Pressable accessibilityRole="button" accessibilityState={{ expanded: jsonExpanded }} onPress={function (): void { setJsonExpanded(function (expanded): boolean { return(!expanded); }); }} style={styles.jsonHeading}>
 						<Text style={styles.heading}>JSON</Text>
